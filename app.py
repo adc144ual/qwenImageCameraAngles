@@ -295,12 +295,12 @@ with gr.Blocks(css=css) as demo:
         gr.HTML("""
         <div id="logo-title">
             <img src="https://qianwen-res.oss-cn-beijing.aliyuncs.com/Qwen-Image/qwen_image_edit_logo.png" alt="Qwen-Image Edit Logo" width="400" style="display: block; margin: 0 auto;">
-            <h2 style="font-style: italic;color: #5b47d1;margin-top: -27px !important;margin-left: 96px">2509 Fast, 8-steps with Lightning LoRA</h2>
+            <h2 style="font-style: italic;color: #5b47d1;margin-top: -27px !important;margin-left: 96px">[Plus] Fast, 8-steps with Lightning LoRA</h2>
         </div>
         """)
         gr.Markdown("""
         [Learn more](https://github.com/QwenLM/Qwen-Image) about the Qwen-Image series. 
-        This demo uses the [Qwen-Image-Lightning v2](https://huggingface.co/lightx2v/Qwen-Image-Lightning) LoRA + [AoT compilation & FA3](https://huggingface.co/blog/zerogpu-aoti) for accelerated inference.
+        This demo uses the new [Qwen-Image-Edit-2509](https://huggingface.co/Qwen/Qwen-Image-Edit-2509) with the [Qwen-Image-Lightning v2](https://huggingface.co/lightx2v/Qwen-Image-Lightning) LoRA + [AoT compilation & FA3](https://huggingface.co/blog/zerogpu-aoti) for accelerated inference.
         Try on [Qwen Chat](https://chat.qwen.ai/), or [download model](https://huggingface.co/Qwen/Qwen-Image-Edit-2509) to run locally with ComfyUI or diffusers.
         """)
         with gr.Row():
