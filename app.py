@@ -98,7 +98,7 @@ Please strictly follow the rewriting rules below:
 }
 '''
 # --- Prompt Enhancement using Hugging Face InferenceClient ---
-def polish_prompt_hf(prompt, img):
+def polish_prompt_hf(prompt, img_list):
     """
     Rewrites the prompt using a Hugging Face InferenceClient.
     """
