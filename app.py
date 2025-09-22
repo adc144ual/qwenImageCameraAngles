@@ -5,7 +5,7 @@ import torch
 import spaces
 
 from PIL import Image
-from diffusers import QwenImageEditPlusPipeline
+from diffusers import QwenImageEditPlusPipeline, FlowMatchEulerDiscreteScheduler
 import math
 
 import os
@@ -332,8 +332,17 @@ css = """
 
 with gr.Blocks(css=css) as demo:
     with gr.Column(elem_id="col-container"):
-        gr.HTML('<img src="https://qianwen-res.oss-cn-beijing.aliyuncs.com/Qwen-Image/qwen_image_edit_logo.png" alt="Qwen-Image Logo" width="400" style="display: block; margin: 0 auto;">')
-        gr.Markdown("[Learn more](https://github.com/QwenLM/Qwen-Image) about the Qwen-Image series. Try on [Qwen Chat](https://chat.qwen.ai/), or [download model](https://huggingface.co/Qwen/Qwen-Image-Edit) to run locally with ComfyUI or diffusers.")
+        gr.HTML("""
+        <div id="logo-title">
+            <img src="https://qianwen-res.oss-cn-beijing.aliyuncs.com/Qwen-Image/qwen_image_edit_logo.png" alt="Qwen-Image Edit Logo" width="400" style="display: block; margin: 0 auto;">
+            <h2 style="font-style: italic;color: #5b47d1;margin-top: -27px !important;margin-left: 96px">Fast, 8-steps with Lightning LoRA</h2>
+        </div>
+        """)
+        gr.Markdown("""
+        [Learn more](https://github.com/QwenLM/Qwen-Image) about the Qwen-Image series. 
+        This demo uses the [Qwen-Image-Lightning v2](https://huggingface.co/lightx2v/Qwen-Image-Lightning) LoRA for accelerated inference.
+        Try on [Qwen Chat](https://chat.qwen.ai/), or [download model](https://huggingface.co/Qwen/Qwen-Image-Edit-2509) to run locally with ComfyUI or diffusers.
+        """)
         with gr.Row():
             with gr.Column():
                 input_images = gr.Gallery(label="Input Images", 
