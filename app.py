@@ -112,11 +112,6 @@ def polish_prompt_hf(prompt, img):
         )
 
         # Format the messages for the chat completions API
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": prompt}
-        ]
-
         sys_promot = "you are a helpful assistant, you should provide useful answers to users."
         messages = [
             {"role": "system", "content": sys_promot},
