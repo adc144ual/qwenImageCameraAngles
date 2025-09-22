@@ -98,13 +98,13 @@ def polish_prompt_hf(prompt, img):
     """
     # Ensure HF_TOKEN is set
     api_key = os.environ.get("HF_TOKEN")
-    prompt = f"{SYSTEM_PROMPT}\n\nUser Input: {prompt}\n\nRewritten Prompt:"
     if not api_key:
         print("Warning: HF_TOKEN not set. Falling back to original prompt.")
-        return original_prompt
+        return prompt
 
     try:
         # Initialize the client
+        prompt = f"{SYSTEM_PROMPT}\n\nUser Input: {prompt}\n\nRewritten Prompt:"
         client = InferenceClient(
             provider="cerebras",
             api_key=api_key,
@@ -152,7 +152,7 @@ def polish_prompt_hf(prompt, img):
     except Exception as e:
         print(f"Error during API call to Hugging Face: {e}")
         # Fallback to original prompt if enhancement fails
-        return original_prompt
+        return prompt
         
 # def polish_prompt(prompt, img):
 #     prompt = f"{SYSTEM_PROMPT}\n\nUser Input: {prompt}\n\nRewritten Prompt:"
@@ -183,37 +183,6 @@ def encode_image(pil_image):
     buffered = io.BytesIO()
     pil_image.save(buffered, format="PNG")
     return base64.b64encode(buffered.getvalue()).decode("utf-8")
-
-
-# def api(prompt, img_list, model="qwen-vl-max-latest", kwargs={}):
-#     import dashscope
-#     api_key = os.environ.get('DASH_API_KEY')
-#     if not api_key:
-#         raise EnvironmentError("DASH_API_KEY is not set")
-#     assert model in ["qwen-vl-max-latest"], f"Not implemented model {model}"
-#     sys_promot = "you are a helpful assistant, you should provide useful answers to users."
-#     messages = [
-#         {"role": "system", "content": sys_promot},
-#         {"role": "user", "content": []}]
-#     for img in img_list:
-#         messages[1]["content"].append(
-#             {"image": f"data:image/png;base64,{encode_image(img)}"})
-#     messages[1]["content"].append({"text": f"{prompt}"})
-
-#     response_format = kwargs.get('response_format', None)
-
-#     response = dashscope.MultiModalConversation.call(
-#         api_key=api_key,
-#         model=model, # For example, use qwen-plus here. You can change the model name as needed. Model list: https://help.aliyun.com/zh/model-studio/getting-started/models
-#         messages=messages,
-#         result_format='message',
-#         response_format=response_format,
-#         )
-
-#     if response.status_code == 200:
-#         return response.output.choices[0].message.content[0]['text']
-#     else:
-#         raise Exception(f'Failed to post: {response}')
 
 # --- Model Loading ---
 dtype = torch.bfloat16
@@ -327,6 +296,12 @@ css = """
     margin: 0 auto;
     max-width: 1024px;
 }
+#logo-title {
+    text-align: center;
+}
+#logo-title img {
+    width: 400px;
+}
 #edit_text{margin-top: -62px !important}
 """
 
@@ -335,7 +310,7 @@ with gr.Blocks(css=css) as demo:
         gr.HTML("""
         <div id="logo-title">
             <img src="https://qianwen-res.oss-cn-beijing.aliyuncs.com/Qwen-Image/qwen_image_edit_logo.png" alt="Qwen-Image Edit Logo" width="400" style="display: block; margin: 0 auto;">
-            <h2 style="font-style: italic;color: #5b47d1;margin-top: -27px !important;margin-left: 96px">Fast, 8-steps with Lightning LoRA</h2>
+            <h2 style="font-style: italic;color: #5b47d1;margin-top: -27px !important;margin-left: 96px">2509 Fast, 8-steps with Lightning LoRA</h2>
         </div>
         """)
         gr.Markdown("""
