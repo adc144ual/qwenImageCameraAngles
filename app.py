@@ -5,7 +5,12 @@ import torch
 import spaces
 
 from PIL import Image
-from diffusers import QwenImageEditPlusPipeline, FlowMatchEulerDiscreteScheduler
+from diffusers import FlowMatchEulerDiscreteScheduler
+from optimization import optimize_pipeline_
+from qwenimage.pipeline_qwenimage_edit_plus import QwenImageEditPlusPipeline
+from qwenimage.transformer_qwenimage import QwenImageTransformer2DModel
+from qwenimage.qwen_fa3_processor import QwenDoubleStreamAttnProcessorFA3
+
 from huggingface_hub import InferenceClient
 import math
 
@@ -192,6 +197,12 @@ pipe.load_lora_weights(
         weight_name="Qwen-Image-Lightning-8steps-V2.0-bf16.safetensors"
     )
 pipe.fuse_lora()
+
+# Apply the same optimizations from the first version
+pipe.transformer.__class__ = QwenImageTransformer2DModel
+pipe.transformer.set_attn_processor(QwenDoubleStreamAttnProcessorFA3())
+
+# --- Ahead-of-time compilation ---
 
 # --- UI Constants and Helpers ---
 MAX_SEED = np.iinfo(np.int32).max

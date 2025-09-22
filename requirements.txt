@@ -8,3 +8,4 @@ dashscope
 kernels
 torchvision
 peft
+torchao==0.11.0
