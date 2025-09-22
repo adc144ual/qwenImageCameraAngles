@@ -5,3 +5,4 @@ safetensors
 sentencepiece
 dashscope
 kernels
+torchvision
