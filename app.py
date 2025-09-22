@@ -6,6 +6,7 @@ import spaces
 
 from PIL import Image
 from diffusers import QwenImageEditPlusPipeline, FlowMatchEulerDiscreteScheduler
+from huggingface_hub import InferenceClient
 import math
 
 import os
@@ -153,29 +154,7 @@ def polish_prompt_hf(prompt, img):
         print(f"Error during API call to Hugging Face: {e}")
         # Fallback to original prompt if enhancement fails
         return prompt
-        
-# def polish_prompt(prompt, img):
-#     prompt = f"{SYSTEM_PROMPT}\n\nUser Input: {prompt}\n\nRewritten Prompt:"
-#     success=False
-#     while not success:
-#         try:
-#             result = api(prompt, [img])
-#             # print(f"Result: {result}")
-#             # print(f"Polished Prompt: {polished_prompt}")
-#             if isinstance(result, str):
-#                 result = result.replace('```json','')
-#                 result = result.replace('```','')
-#                 result = json.loads(result)
-#             else:
-#                 result = json.loads(result)
-
-#             polished_prompt = result['Rewritten']
-#             polished_prompt = polished_prompt.strip()
-#             polished_prompt = polished_prompt.replace("\n", " ")
-#             success = True
-#         except Exception as e:
-#             print(f"[Warning] Error during API call: {e}")
-#     return polished_prompt
+    
 
 
 def encode_image(pil_image):
