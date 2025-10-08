@@ -194,7 +194,7 @@ pipe = QwenImageEditPlusPipeline.from_pretrained("Qwen/Qwen-Image-Edit-2509",
                                                  torch_dtype=dtype).to(device)
 pipe.load_lora_weights(
         "lightx2v/Qwen-Image-Lightning", 
-        weight_name="Qwen-Image-Lightning-8steps-V2.0-bf16.safetensors"
+        weight_name="Qwen-Image-Edit-2509/Qwen-Image-Edit-2509-Lightning-8steps-V1.0-bf16.safetensors"
     )
 pipe.fuse_lora()
 
