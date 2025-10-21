@@ -13,6 +13,8 @@ from qwenimage.qwen_fa3_processor import QwenDoubleStreamAttnProcessorFA3
 
 from huggingface_hub import InferenceClient
 import math
+from huggingface_hub import hf_hub_download
+from safetensors.torch import load_file
 
 import os
 import base64
@@ -168,35 +170,46 @@ dtype = torch.bfloat16
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
 # Scheduler configuration for Lightning
-scheduler_config = {
-    "base_image_seq_len": 256,
-    "base_shift": math.log(3),
-    "invert_sigmas": False,
-    "max_image_seq_len": 8192,
-    "max_shift": math.log(3),
-    "num_train_timesteps": 1000,
-    "shift": 1.0,
-    "shift_terminal": None,
-    "stochastic_sampling": False,
-    "time_shift_type": "exponential",
-    "use_beta_sigmas": False,
-    "use_dynamic_shifting": True,
-    "use_exponential_sigmas": False,
-    "use_karras_sigmas": False,
-}
+# scheduler_config = {
+#     "base_image_seq_len": 256,
+#     "base_shift": math.log(3),
+#     "invert_sigmas": False,
+#     "max_image_seq_len": 8192,
+#     "max_shift": math.log(3),
+#     "num_train_timesteps": 1000,
+#     "shift": 1.0,
+#     "shift_terminal": None,
+#     "stochastic_sampling": False,
+#     "time_shift_type": "exponential",
+#     "use_beta_sigmas": False,
+#     "use_dynamic_shifting": True,
+#     "use_exponential_sigmas": False,
+#     "use_karras_sigmas": False,
+# }
 
-# Initialize scheduler with Lightning config
-scheduler = FlowMatchEulerDiscreteScheduler.from_config(scheduler_config)
+# # Initialize scheduler with Lightning config
+# scheduler = FlowMatchEulerDiscreteScheduler.from_config(scheduler_config)
 
-# Load the model pipeline
+# # Load the model pipeline
+# pipe = QwenImageEditPlusPipeline.from_pretrained("Qwen/Qwen-Image-Edit-2509", 
+#                                                  scheduler=scheduler,
+#                                                  torch_dtype=dtype).to(device)
+# pipe.load_lora_weights(
+#         "lightx2v/Qwen-Image-Lightning", 
+#         weight_name="Qwen-Image-Edit-2509/Qwen-Image-Edit-2509-Lightning-8steps-V1.0-bf16.safetensors"
+#     )
+# pipe.fuse_lora()
 pipe = QwenImageEditPlusPipeline.from_pretrained("Qwen/Qwen-Image-Edit-2509", 
-                                                 scheduler=scheduler,
+                                                 # scheduler=scheduler,
                                                  torch_dtype=dtype).to(device)
-pipe.load_lora_weights(
-        "lightx2v/Qwen-Image-Lightning", 
-        weight_name="Qwen-Image-Edit-2509/Qwen-Image-Edit-2509-Lightning-8steps-V1.0-bf16.safetensors"
-    )
-pipe.fuse_lora()
+weights_path = hf_hub_download(
+    repo_id="linoyts/Qwen-Image-Edit-Rapid-AIO",
+    filename="transformer/transformer_weights.safetensors",
+    repo_type="model"
+)
+state_dict = load_file(weights_path)
+
+pipe.transformer.load_state_dict(state_dict, strict=False)
 
 # Apply the same optimizations from the first version
 pipe.transformer.__class__ = QwenImageTransformer2DModel
@@ -222,7 +235,7 @@ def infer(
     seed=42,
     randomize_seed=False,
     true_guidance_scale=1.0,
-    num_inference_steps=8,
+    num_inference_steps=4,
     height=None,
     width=None,
     rewrite_prompt=True,
@@ -360,7 +373,7 @@ with gr.Blocks(css=css) as demo:
                     minimum=1,
                     maximum=40,
                     step=1,
-                    value=8,
+                    value=4,
                 )
                 
                 height = gr.Slider(
