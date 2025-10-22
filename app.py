@@ -179,59 +179,58 @@ def suggest_next_scene_prompt(images):
     """
     Suggests a Next Scene prompt based on the uploaded image(s).
     """
-    if images is None or len(images) == 0:
-        return ""
-    
     api_key = os.environ.get("HF_TOKEN")
     if not api_key:
-        print("Warning: HF_TOKEN not set. Cannot generate suggestions.")
-        return ""
+        print("Warning: HF_TOKEN not set. Falling back to original prompt.")
+        return prompt
 
     try:
-        # Load input images into PIL Images
-        pil_images = []
-        for item in images:
-            try:
-                if isinstance(item[0], Image.Image):
-                    pil_images.append(item[0].convert("RGB"))
-                elif isinstance(item[0], str):
-                    pil_images.append(Image.open(item[0]).convert("RGB"))
-                elif hasattr(item, "name"):
-                    pil_images.append(Image.open(item.name).convert("RGB"))
-            except Exception:
-                continue
-        
-        if len(pil_images) == 0:
-            return ""
-
+        # Initialize the client
+        prompt = f"{NEXT_SCENE_PROMPT}"
         client = InferenceClient(
             provider="cerebras",
             api_key=api_key,
         )
 
+        # Format the messages for the chat completions API
+        sys_promot = "you are a helpful assistant, you should provide useful answers to users."
         messages = [
-            {"role": "system", "content": "You are a helpful cinematic storytelling assistant."},
-            {"role": "user", "content": []}
-        ]
-        
-        # Add the first image only for suggestion
-        messages[1]["content"].append(
-            {"image": f"data:image/png;base64,{encode_image(pil_images[0])}"}
-        )
-        messages[1]["content"].append({"text": NEXT_SCENE_PROMPT})
+            {"role": "system", "content": sys_promot},
+            {"role": "user", "content": []}]
+        for img in img_list:
+            messages[1]["content"].append(
+                {"image": f"data:image/png;base64,{encode_image(img)}"})
+        messages[1]["content"].append({"text": f"{prompt}"})
 
+        # Call the API
         completion = client.chat.completions.create(
             model="Qwen/Qwen3-235B-A22B-Instruct-2507",
             messages=messages,
         )
         
-        suggested_prompt = completion.choices[0].message.content.strip()
-        print(f"Suggested Next Scene Prompt: {suggested_prompt}")
-        return suggested_prompt
+        # Parse the response
+        result = completion.choices[0].message.content
+        
+        # Try to extract JSON if present
+        if '{"Rewritten"' in result:
+            try:
+                # Clean up the response
+                result = result.replace('```json', '').replace('```', '')
+                result_json = json.loads(result)
+                polished_prompt = result_json.get('Rewritten', result)
+            except:
+                polished_prompt = result
+        else:
+            polished_prompt = result
+            
+        polished_prompt = polished_prompt.strip().replace("\n", " ")
+        return polished_prompt
         
     except Exception as e:
-        print(f"Error generating Next Scene suggestion: {e}")
-        return ""
+        print(f"Error during API call to Hugging Face: {e}")
+        # Fallback to original prompt if enhancement fails
+        return prompt
+
 
 
 def encode_image(pil_image):
@@ -454,7 +453,7 @@ with gr.Blocks(css=css) as demo:
         # gr.Examples(examples=examples, inputs=[prompt], outputs=[result, seed], fn=infer, cache_examples=False)
 
     # Auto-suggest prompt when images are uploaded
-    input_images.change(
+    input_images.upload(
         fn=suggest_next_scene_prompt,
         inputs=[input_images],
         outputs=[prompt]
