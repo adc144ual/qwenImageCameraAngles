@@ -99,6 +99,23 @@ Please strictly follow the rewriting rules below:
    "Rewritten": "..."
 }
 '''
+
+NEXT_SCENE_PROMPT = '''
+You are a cinematic storytelling assistant. Analyze the provided image and suggest a "Next Scene" prompt that creates a natural narrative progression.
+
+Follow these guidelines for Next Scene suggestions:
+* Start with camera direction (dolly, pan, tilt, pull back, push in, track)
+* Maintain compositional coherence while introducing organic transitions
+* Consider: camera movement, framing evolution, environmental reveals, atmospheric shifts
+
+Examples of good Next Scene prompts:
+* "Next Scene: The camera pulls back from a tight close-up to a sweeping aerial view, revealing an entire fleet of vessels soaring through a fantasy landscape."
+* "Next Scene: The camera tracks forward and tilts down, bringing the sun closer into frame as a strong lens flare intensifies."
+* "Next Scene: The camera pans right, revealing more of the mountain range in the distance."
+
+Based on the image provided, suggest ONE concise Next Scene prompt that would create a compelling cinematic transition. Output ONLY the prompt text, starting with "Next Scene:".
+'''
+
 # --- Prompt Enhancement using Hugging Face InferenceClient ---
 def polish_prompt_hf(prompt, img_list):
     """
@@ -156,7 +173,65 @@ def polish_prompt_hf(prompt, img_list):
         print(f"Error during API call to Hugging Face: {e}")
         # Fallback to original prompt if enhancement fails
         return prompt
+
+
+def suggest_next_scene_prompt(images):
+    """
+    Suggests a Next Scene prompt based on the uploaded image(s).
+    """
+    if images is None or len(images) == 0:
+        return ""
     
+    api_key = os.environ.get("HF_TOKEN")
+    if not api_key:
+        print("Warning: HF_TOKEN not set. Cannot generate suggestions.")
+        return ""
+
+    try:
+        # Load input images into PIL Images
+        pil_images = []
+        for item in images:
+            try:
+                if isinstance(item[0], Image.Image):
+                    pil_images.append(item[0].convert("RGB"))
+                elif isinstance(item[0], str):
+                    pil_images.append(Image.open(item[0]).convert("RGB"))
+                elif hasattr(item, "name"):
+                    pil_images.append(Image.open(item.name).convert("RGB"))
+            except Exception:
+                continue
+        
+        if len(pil_images) == 0:
+            return ""
+
+        client = InferenceClient(
+            provider="cerebras",
+            api_key=api_key,
+        )
+
+        messages = [
+            {"role": "system", "content": "You are a helpful cinematic storytelling assistant."},
+            {"role": "user", "content": []}
+        ]
+        
+        # Add the first image only for suggestion
+        messages[1]["content"].append(
+            {"image": f"data:image/png;base64,{encode_image(pil_images[0])}"}
+        )
+        messages[1]["content"].append({"text": NEXT_SCENE_PROMPT})
+
+        completion = client.chat.completions.create(
+            model="Qwen/Qwen3-235B-A22B-Instruct-2507",
+            messages=messages,
+        )
+        
+        suggested_prompt = completion.choices[0].message.content.strip()
+        print(f"Suggested Next Scene Prompt: {suggested_prompt}")
+        return suggested_prompt
+        
+    except Exception as e:
+        print(f"Error generating Next Scene suggestion: {e}")
+        return ""
 
 
 def encode_image(pil_image):
@@ -295,13 +370,15 @@ with gr.Blocks(css=css) as demo:
         gr.HTML("""
         <div id="logo-title">
             <img src="https://qianwen-res.oss-cn-beijing.aliyuncs.com/Qwen-Image/qwen_image_edit_logo.png" alt="Qwen-Image Edit Logo" width="400" style="display: block; margin: 0 auto;">
-            <h2 style="font-style: italic;color: #5b47d1;margin-top: -27px !important;margin-left: 96px">[Plus] Fast, 4-steps with Qwen Rapid AIO</h2>
+            <h2 style="font-style: italic;color: #5b47d1;margin-top: -27px !important;margin-left: 96px">[Plus] Fast, 4-steps with Qwen Rapid AIO + Next Scene Suggestions</h2>
         </div>
         """)
         gr.Markdown("""
         [Learn more](https://github.com/QwenLM/Qwen-Image) about the Qwen-Image series. 
         This demo uses the new [Qwen-Image-Edit-2509](https://huggingface.co/Qwen/Qwen-Image-Edit-2509) with [Phr00t/Qwen-Image-Edit-Rapid-AIO](https://huggingface.co/Phr00t/Qwen-Image-Edit-Rapid-AIO/tree/main) + [AoT compilation & FA3](https://huggingface.co/blog/zerogpu-aoti) for accelerated inference.
         Try on [Qwen Chat](https://chat.qwen.ai/), or [download model](https://huggingface.co/Qwen/Qwen-Image-Edit-2509) to run locally with ComfyUI or diffusers.
+        
+        **Upload an image to automatically receive a Next Scene prompt suggestion!**
         """)
         with gr.Row():
             with gr.Column():
@@ -319,7 +396,7 @@ with gr.Blocks(css=css) as demo:
             prompt = gr.Text(
                     label="Prompt",
                     show_label=False,
-                    placeholder="describe the edit instruction",
+                    placeholder="describe the edit instruction (auto-suggested for Next Scene)",
                     container=False,
             )
             run_button = gr.Button("Edit!", variant="primary")
@@ -375,6 +452,13 @@ with gr.Blocks(css=css) as demo:
                 rewrite_prompt = gr.Checkbox(label="Rewrite prompt", value=False)
 
         # gr.Examples(examples=examples, inputs=[prompt], outputs=[result, seed], fn=infer, cache_examples=False)
+
+    # Auto-suggest prompt when images are uploaded
+    input_images.change(
+        fn=suggest_next_scene_prompt,
+        inputs=[input_images],
+        outputs=[prompt]
+    )
 
     gr.on(
         triggers=[run_button.click, prompt.submit],
