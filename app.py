@@ -183,9 +183,12 @@ state_dict = load_file(weights_path)
 pipe.transformer.load_state_dict(state_dict, strict=False)
 pipe.load_lora_weights(
         "lovis93/next-scene-qwen-image-lora-2509", 
-        weight_name="next-scene_lora-v2-3000.safetensors"
+        weight_name="next-scene_lora-v2-3000.safetensors", adapter_name="next-scene"
     )
-pipe.fuse_lora()
+pipe.set_adapters(["next-scene"], adapter_weights=[1.])
+pipe.fuse_lora(adapter_names=["next-scene"], lora_scale=1.)
+pipe.unload_lora_weights()
+
 
 # Apply the same optimizations from the first version
 pipe.transformer.__class__ = QwenImageTransformer2DModel
