@@ -205,37 +205,81 @@ def polish_prompt_hf(prompt, img_list):
         # Fallback to original prompt if enhancement fails
         return prompt
     
-def next_scene_prompt(img_list):
+def next_scene_prompt(original_prompt, img_list):
     """
     Rewrites the prompt using a Hugging Face InferenceClient.
+    Supports multiple images via img_list.
     """
     # Ensure HF_TOKEN is set
     api_key = os.environ.get("HF_TOKEN")
     if not api_key:
         print("Warning: HF_TOKEN not set. Falling back to original prompt.")
-        return prompt
-
+        return original_prompt
+    prompt = f"{NEXT_SCENE_SYSTEM_PROMPT}"
+    system_prompt = "you are a helpful assistant, you should provide useful answers to users."
     try:
         # Initialize the client
-        prompt = f"{NEXT_SCENE_SYSTEM_PROMPT}"
         client = InferenceClient(
-            provider="cerebras",
+            provider="nebius",
             api_key=api_key,
         )
 
+        # Convert list of images to base64 data URLs
+        image_urls = []
+        if img_list is not None:
+            # Ensure img_list is actually a list
+            if not isinstance(img_list, list):
+                img_list = [img_list]
+            
+            for img in img_list:
+                image_url = None
+                # If img is a PIL Image
+                if hasattr(img, 'save'):  # Check if it's a PIL Image
+                    buffered = BytesIO()
+                    img.save(buffered, format="PNG")
+                    img_base64 = base64.b64encode(buffered.getvalue()).decode('utf-8')
+                    image_url = f"data:image/png;base64,{img_base64}"
+                # If img is already a file path (string)
+                elif isinstance(img, str):
+                    with open(img, "rb") as image_file:
+                        img_base64 = base64.b64encode(image_file.read()).decode('utf-8')
+                    image_url = f"data:image/png;base64,{img_base64}"
+                else:
+                    print(f"Warning: Unexpected image type: {type(img)}, skipping...")
+                    continue
+                
+                if image_url:
+                    image_urls.append(image_url)
+
+        # Build the content array with text first, then all images
+        content = [
+            {
+                "type": "text",
+                "text": prompt
+            }
+        ]
+        
+        # Add all images to the content
+        for image_url in image_urls:
+            content.append({
+                "type": "image_url",
+                "image_url": {
+                    "url": image_url
+                }
+            })
+
         # Format the messages for the chat completions API
-        sys_promot = "you are a helpful assistant, you should provide useful answers to users."
         messages = [
-            {"role": "system", "content": sys_promot},
-            {"role": "user", "content": []}]
-        for img in img_list:
-            messages[1]["content"].append(
-                {"image": f"data:image/png;base64,{encode_image(img)}"})
-        messages[1]["content"].append({"text": f"{prompt}"})
+            {"role": "system", "content": system_prompt},
+            {
+                "role": "user",
+                "content": content
+            }
+        ]
 
         # Call the API
         completion = client.chat.completions.create(
-            model="Qwen/Qwen3-235B-A22B-Instruct-2507",
+            model="Qwen/Qwen2.5-VL-72B-Instruct",
             messages=messages,
         )
         
@@ -243,7 +287,7 @@ def next_scene_prompt(img_list):
         result = completion.choices[0].message.content
         
         # Try to extract JSON if present
-        if '{"Rewritten"' in result:
+        if '"Rewritten"' in result:
             try:
                 # Clean up the response
                 result = result.replace('```json', '').replace('```', '')
@@ -260,7 +304,9 @@ def next_scene_prompt(img_list):
     except Exception as e:
         print(f"Error during API call to Hugging Face: {e}")
         # Fallback to original prompt if enhancement fails
-        return prompt
+        return original_prompt 
+
+
 
 def encode_image(pil_image):
     import io
