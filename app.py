@@ -363,7 +363,7 @@ def suggest_next_scene_prompt(images):
             except Exception:
                 continue
     if len(pil_images) > 0:
-        prompt = next_scene_prompt(pil_images)
+        prompt = next_scene_prompt("", pil_images)
     else:
         prompt = ""
     print("next scene prompt: ", prompt)
