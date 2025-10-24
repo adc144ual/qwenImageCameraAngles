@@ -20,6 +20,7 @@ import os
 import base64
 from io import BytesIO
 import json
+import time  # Added for history update delay
 
 SYSTEM_PROMPT = '''
 # Edit Instruction Rewriter
@@ -299,7 +300,25 @@ def next_scene_prompt(original_prompt, img_list):
         return original_prompt 
 
 
+def update_history(new_images, history):
+    """Updates the history gallery with the new images."""
+    time.sleep(0.5)  # Small delay to ensure images are ready
+    if history is None:
+        history = []
+    if new_images is not None and len(new_images) > 0:
+        if not isinstance(history, list):
+            history = list(history) if history else []
+        for img in new_images:
+            history.insert(0, img)
+    history = history[:20]  # Keep only last 20 images
+    return history
 
+def use_history_as_input(evt: gr.SelectData):
+    """Sets the selected history image as the new input image."""
+    if evt.value is not None:
+        return gr.update(value=[(evt.value,)])
+    return gr.update()
+    
 def encode_image(pil_image):
     import io
     buffered = io.BytesIO()
@@ -470,6 +489,20 @@ with gr.Blocks(css=css) as demo:
                 # Add this button right after the result gallery - initially hidden
                 use_output_btn = gr.Button("↗️ Use as input", variant="secondary", size="sm", visible=False)
 
+                with gr.Row():
+                    gr.Markdown("### 📜 History")
+                    clear_history_button = gr.Button("🗑️ Clear History", size="sm", variant="stop")
+                
+                history_gallery = gr.Gallery(
+                    label="Click any image to use as input", 
+                    columns=4, 
+                    rows=2,
+                    object_fit="contain", 
+                    height="auto",
+                    interactive=False,
+                    show_label=True
+                )
+
         with gr.Row():
             prompt = gr.Text(
                     label="Prompt",
@@ -546,6 +579,11 @@ with gr.Blocks(css=css) as demo:
             rewrite_prompt,
         ],
         outputs=[result, seed, use_output_btn],  # Added use_output_btn to outputs
+    ).then(
+    fn=update_history,
+    inputs=[result, history_gallery],
+    outputs=history_gallery,
+
     )
 
     # Add the new event handler for the "Use Output as Input" button
@@ -553,6 +591,21 @@ with gr.Blocks(css=css) as demo:
         fn=use_output_as_input,
         inputs=[result],
         outputs=[input_images]
+    )
+
+    # History gallery event handlers
+    history_gallery.select(
+        fn=use_history_as_input,
+        inputs=None,
+        outputs=[input_images],
+
+    )
+    
+    clear_history_button.click(
+        fn=lambda: [],
+        inputs=None,
+        outputs=history_gallery,
+
     )
 
     input_images.change(fn=suggest_next_scene_prompt, inputs=[input_images], outputs=[prompt])
