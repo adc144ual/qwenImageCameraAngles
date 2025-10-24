@@ -557,6 +557,15 @@ with gr.Blocks(css=css) as demo:
                     show_label=True
                 )
 
+            gr.Examples(examples=[
+                [["disaster_girl.jpg", "grumpycat.png"], "Next Scene: the camera zooms in, showing the cat walking away from the fire"],
+                [["wednesday.png"], "Next Scene: The camera pulls back and rises to an elevated angle, revealing the full dance floor with the choreographed movements of all dancers as the central figure becomes part of the larger ensemble."],
+                ],
+                    inputs=[input_images, prompt], 
+                    outputs=[result, seed], 
+                    fn=infer, 
+                    cache_examples="lazy")
+
 
         
 
