@@ -495,20 +495,15 @@ with gr.Blocks(css=css) as demo:
                 
                 history_gallery = gr.Gallery(
                     label="Click any image to use as input", 
-                    columns=4, 
-                    rows=2,
-                    object_fit="contain", 
-                    height="auto",
                     interactive=False,
                     show_label=True
                 )
 
         with gr.Row():
             prompt = gr.Text(
-                    label="Prompt",
-                    show_label=False,
-                    placeholder="describe the edit instruction",
-                    container=False,
+                    label="Prompt 🪄",
+                    show_label=True,
+                    placeholder="Next scene: The camera dollies in to a tight close-up...",
             )
             run_button = gr.Button("Edit!", variant="primary")
 
