@@ -60,7 +60,7 @@ def turn_into_video(input_images, output_images, prompt, progress=gr.Progress(tr
 
     progress(0.35, desc="Generating video...")
 
-    result = client.predict(
+    video_path, seed = client.predict(
         start_image_pil=handle_file(tmp_start.name),
         end_image_pil=handle_file(tmp_end.name),
         prompt=prompt or "smooth cinematic transition",
@@ -68,8 +68,8 @@ def turn_into_video(input_images, output_images, prompt, progress=gr.Progress(tr
     )
 
     progress(0.95, desc="Finalizing...")
-
-    return result[0]
+    print(video_path)
+    return video_path
 
 
 
