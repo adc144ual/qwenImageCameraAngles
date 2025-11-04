@@ -101,6 +101,7 @@ def infer_camera_edit(
     num_inference_steps,
     height,
     width,
+    progress=gr.Progress(track_tqdm=True)
 ):
     prompt = build_camera_prompt(rotate_deg, move_forward, vertical_tilt, wideangle)
     print(f"Generated Prompt: {prompt}")
@@ -166,7 +167,7 @@ with gr.Blocks(theme=gr.themes.Citrus(), css=css) as demo:
                 is_reset = gr.State(value=False)
 
                 with gr.Tab("Camera Controls"):
-                    rotate_deg = gr.Slider(label="Rotate Left–Right (°)", minimum=-90, maximum=90, step=45, value=0)
+                    rotate_deg = gr.Slider(label="Rotate Left–Right (degrees °)", minimum=-90, maximum=90, step=45, value=0)
                     move_forward = gr.Slider(label="Move Forward → Close-Up", minimum=0, maximum=10, step=5, value=0)
                     vertical_tilt = gr.Slider(label="Vertical Angle (Bird ↔ Worm)", minimum=-1, maximum=1, step=1, value=0)
                     wideangle = gr.Checkbox(label="Wide-Angle Lens", value=False)
@@ -186,7 +187,7 @@ with gr.Blocks(theme=gr.themes.Citrus(), css=css) as demo:
                     
 
             with gr.Column():
-                result = gr.Image(label="Output Image")
+                result = gr.Image(label="Output Image", interactive=False)
                 prompt_preview = gr.Textbox(label="Processed Prompt", interactive=False)
                 #gr.Markdown("_Each change applies a fresh camera instruction to the last output image._")
 
@@ -231,7 +232,7 @@ with gr.Blocks(theme=gr.themes.Citrus(), css=css) as demo:
     control_inputs_with_flag = [is_reset] + control_inputs
 
     for control in [rotate_deg, move_forward, vertical_tilt, wideangle]:
-        control.change(fn=maybe_infer, inputs=control_inputs_with_flag, outputs=outputs, show_progress="minimal")
+        control.change(fn=maybe_infer, inputs=control_inputs_with_flag, trigger_mode="always_last", outputs=outputs)
 
     run_event.then(lambda img, *_: img, inputs=[result], outputs=[prev_output])
 
