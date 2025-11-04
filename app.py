@@ -16,13 +16,6 @@ from huggingface_hub import hf_hub_download
 from safetensors.torch import load_file
 
 import os
-import base64
-from io import BytesIO
-import json
-import time  # Added for history update delay
-
-from gradio_client import Client, handle_file
-import tempfile
 from PIL import Image
 import os
 import gradio as gr
@@ -43,69 +36,65 @@ pipe.load_lora_weights(
         weight_name="镜头转换.safetensors", adapter_name="angles"
     )
 
-pipe.load_lora_weights(
-        "lovis93/next-scene-qwen-image-lora-2509", 
-        weight_name="next-scene_lora-v2-3000.safetensors", adapter_name="next-scene"
-    )
-pipe.set_adapters(["angles","next-scene"], adapter_weights=[1., 1.])
-pipe.fuse_lora(adapter_names=["angles"], lora_scale=1.)
-pipe.fuse_lora(adapter_names=["next-scene"], lora_scale=1.)
+# pipe.load_lora_weights(
+#         "lovis93/next-scene-qwen-image-lora-2509", 
+#         weight_name="next-scene_lora-v2-3000.safetensors", adapter_name="next-scene"
+#     )
+pipe.set_adapters(["angles"], adapter_weights=[1.])
+pipe.fuse_lora(adapter_names=["angles"], lora_scale=1.25)
+# pipe.fuse_lora(adapter_names=["next-scene"], lora_scale=1.)
 pipe.unload_lora_weights()
 
 
-# # Apply the same optimizations from the first version
+
 pipe.transformer.__class__ = QwenImageTransformer2DModel
 pipe.transformer.set_attn_processor(QwenDoubleStreamAttnProcessorFA3())
 
-# # --- Ahead-of-time compilation ---
 optimize_pipeline_(pipe, image=[Image.new("RGB", (1024, 1024)), Image.new("RGB", (1024, 1024))], prompt="prompt")
 
-# --- UI Constants and Helpers ---
+
 MAX_SEED = np.iinfo(np.int32).max
 
-# --- Build natural language prompt from sliders ---
-def build_camera_prompt(rotate_deg, move_lr, move_forward, topdown, wideangle, closeup):
+def build_camera_prompt(rotate_deg, move_forward, vertical_tilt, wideangle):
     prompt_parts = []
 
     # Rotation
     if rotate_deg != 0:
         direction = "left" if rotate_deg > 0 else "right"
-        prompt_parts.append(f"Rotate the camera {abs(rotate_deg)} degrees to the {direction}.")
+        if direction == "left":
+            prompt_parts.append(f"将镜头向左旋转{abs(rotate_deg)}度 Rotate the camera {abs(rotate_deg)} degrees to the left.")
+        else:
+            prompt_parts.append(f"将镜头向右旋转{abs(rotate_deg)}度 Rotate the camera {abs(rotate_deg)} degrees to the right.")
 
-    # Movement
-    if move_lr > 0:
-        prompt_parts.append("Move the camera left.")
-    elif move_lr < 0:
-        prompt_parts.append("Move the camera right.")
 
-    if move_forward > 0:
-        prompt_parts.append("Move the camera forward.")
-    elif move_forward < 0:
-        prompt_parts.append("Move the camera backward.")
+    # Move forward / close-up
+    if move_forward >= 5:
+        prompt_parts.append("将镜头转为特写镜头 Turn the camera to a close-up.")
+    elif move_forward >= 1:
+        prompt_parts.append("将镜头向前移动 Move the camera forward.")
 
-    # Lens / perspective options
-    if topdown:
-        prompt_parts.append("Turn the camera to a top-down view.")
+    # Vertical tilt
+    if vertical_tilt <= -1:
+        prompt_parts.append("将相机转向鸟瞰视角 Turn the camera to a bird's-eye view.")
+    elif vertical_tilt >= 1:
+        prompt_parts.append("将相机切换到仰视视角 Turn the camera to a worm's-eye view.")
+
+    # Lens option
     if wideangle:
-        prompt_parts.append("Turn the camera to a wide-angle lens.")
-    if closeup:
-        prompt_parts.append("Turn the camera to a close-up lens.")
+        prompt_parts.append(" 将镜头转为广角镜头 Turn the camera to a wide-angle lens.")
 
     final_prompt = " ".join(prompt_parts).strip()
-    return final_prompt if final_prompt else "No camera movement."
+    return final_prompt if final_prompt else ""
 
 
-# --- Main inference function (unchanged backend) ---
-@spaces.GPU(duration=300)
+@spaces.GPU
 def infer_camera_edit(
     image,
     prev_output,
     rotate_deg,
-    move_lr,
     move_forward,
-    topdown,
+    vertical_tilt,
     wideangle,
-    closeup,
     seed,
     randomize_seed,
     true_guidance_scale,
@@ -113,14 +102,14 @@ def infer_camera_edit(
     height,
     width,
 ):
-    prompt = build_camera_prompt(rotate_deg, move_lr, move_forward, topdown, wideangle, closeup)
+    prompt = build_camera_prompt(rotate_deg, move_forward, vertical_tilt, wideangle)
     print(f"Generated Prompt: {prompt}")
 
     if randomize_seed:
         seed = random.randint(0, MAX_SEED)
     generator = torch.Generator(device=device).manual_seed(seed)
 
-    # Use previous output if no new image uploaded
+    # Choose input image (prefer uploaded, else last output)
     pil_images = []
     if image is not None:
         if isinstance(image, Image.Image):
@@ -147,30 +136,38 @@ def infer_camera_edit(
     return result, seed, prompt
 
 
-# --- Gradio UI ---
-css = '''
-#col-container { max-width: 800px; margin: 0 auto; }
-'''
+# --- UI ---
+css = "#col-container { max-width: 800px; margin: 0 auto; }"
+
+is_reset = gr.State(value=False)
+
+def reset_all():
+    return [0, 0, 0, 0, False, True]
+
+def end_reset():
+    return False
+
 
 with gr.Blocks(css=css) as demo:
     with gr.Column(elem_id="col-container"):
         gr.Markdown("## 🎬 Qwen Image Edit — Camera Angle Control")
-        gr.Markdown("Edit the same image from multiple camera angles using Qwen Edit and the 'Multiple Angles' LoRA. Each edit applies to the latest output for fluid camera movement.")
+        gr.Markdown(
+            ""
+        )
 
         with gr.Row():
             with gr.Column():
                 image = gr.Image(label="Input Image", type="pil", sources=["upload"])
                 prev_output = gr.State(value=None)
+                is_reset = gr.State(value=False)
 
-                with gr.Tab("Camera Controls"):
-                    rotate_deg = gr.Slider(
-                        label="Rotate Left–Right (°)",
-                       minimum=-90, maximum=90, step=45, value=0)
-                    move_lr = gr.Slider(label="Move Right–Left", minimum=-10, maximum=10, step=1, value=0)
-                    move_forward = gr.Slider(label="Move Forward/Backward", minimum=-10, maximum=10, step=1, value=0)
-                    topdown = gr.Checkbox(label="Top-Down View", value=False)
+                with gr.Group():
+                    rotate_deg = gr.Slider(label="Rotate Left–Right (°)", minimum=-90, maximum=90, step=45, value=0)
+                    move_forward = gr.Slider(label="Move Forward → Close-Up", minimum=0, maximum=10, step=5, value=0)
+                    vertical_tilt = gr.Slider(label="Vertical Angle (Bird ↔ Worm)", minimum=-1, maximum=1, step=1, value=0)
                     wideangle = gr.Checkbox(label="Wide-Angle Lens", value=False)
-                    closeup = gr.Checkbox(label="Close-Up Lens", value=False)
+                    with gr.Row():
+                        reset_btn = gr.Button("reset settings")
 
                 with gr.Accordion("Advanced Settings", open=False):
                     seed = gr.Slider(label="Seed", minimum=0, maximum=MAX_SEED, step=1, value=0)
@@ -180,44 +177,57 @@ with gr.Blocks(css=css) as demo:
                     height = gr.Slider(label="Height", minimum=256, maximum=2048, step=8, value=1024)
                     width = gr.Slider(label="Width", minimum=256, maximum=2048, step=8, value=1024)
 
-                with gr.Row():
-                    reset_btn = gr.Button("Reset")
-                    run_btn = gr.Button("Generate", variant="primary")
+                
+                    run_btn = gr.Button("Generate", variant="primary", visible=False)
 
             with gr.Column():
                 result = gr.Image(label="Output Image")
-                prompt_preview = gr.Textbox(label="Generated Prompt", interactive=False)
-                gr.Markdown("_Each change applies a fresh camera instruction to the last output image._")
+                prompt_preview = gr.Textbox(label="Processed Prompt", interactive=False)
+                #gr.Markdown("_Each change applies a fresh camera instruction to the last output image._")
 
-    # Define inputs & outputs
     inputs = [
-        image, prev_output, rotate_deg, move_lr, move_forward,
-        topdown, wideangle, closeup,
+        image, prev_output, rotate_deg, move_forward,
+        vertical_tilt, wideangle,
         seed, randomize_seed, true_guidance_scale, num_inference_steps, height, width
     ]
     outputs = [result, seed, prompt_preview]
 
-    def reset_all():
-        return [0, 0, 0, False, False, False]
-
+    # Reset behavior
     reset_btn.click(
         fn=reset_all,
         inputs=None,
-        outputs=[rotate_deg, move_lr, move_forward, topdown, wideangle, closeup],
+        outputs=[rotate_deg, move_forward, vertical_tilt, wideangle, is_reset],
         queue=False
-    )
+    ).then(fn=end_reset, inputs=None, outputs=[is_reset], queue=False)
 
-    run_event = run_btn.click(
-        fn=infer_camera_edit,
-        inputs=inputs,
-        outputs=outputs
-    )
+    # Manual generation
+    run_event = run_btn.click(fn=infer_camera_edit, inputs=inputs, outputs=outputs)
 
-    # Live updates on control release
-    for control in [rotate_deg, move_lr, move_forward, topdown, wideangle, closeup]:
-        control.change(fn=infer_camera_edit, inputs=inputs, outputs=outputs, show_progress="minimal")
+    # Image upload resets
+    image.change(
+        fn=reset_all,
+        inputs=None,
+        outputs=[rotate_deg, move_forward, vertical_tilt, wideangle, is_reset],
+        queue=False
+    ).then(fn=end_reset, inputs=None, outputs=[is_reset], queue=False)
 
-    # Save latest output as next input
-    run_event.then(lambda img, *_: img, inputs=outputs, outputs=[prev_output])
+    # Live updates
+    def maybe_infer(is_reset, *args):
+        if is_reset:
+            return gr.update(), gr.update(), gr.update()
+        else:
+            return infer_camera_edit(*args)
+
+    control_inputs = [
+        image, prev_output, rotate_deg, move_forward,
+        vertical_tilt, wideangle,
+        seed, randomize_seed, true_guidance_scale, num_inference_steps, height, width
+    ]
+    control_inputs_with_flag = [is_reset] + control_inputs
+
+    for control in [rotate_deg, move_forward, vertical_tilt, wideangle]:
+        control.change(fn=maybe_infer, inputs=control_inputs_with_flag, outputs=outputs, show_progress="minimal")
+
+    run_event.then(lambda img, *_: img, inputs=[result], outputs=[prev_output])
 
 demo.launch()
