@@ -140,7 +140,8 @@ def infer_camera_edit(
 
 
 # --- UI ---
-css = "#col-container { max-width: 800px; margin: 0 auto; }"
+css = '''#col-container { max-width: 800px; margin: 0 auto; }
+.dark .progress-text{color: white !important}'''
 
 is_reset = gr.State(value=False)
 
