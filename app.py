@@ -90,6 +90,7 @@ def build_camera_prompt(rotate_deg, move_forward, vertical_tilt, wideangle):
 @spaces.GPU
 def infer_camera_edit(
     image,
+    prev_output,
     rotate_deg,
     move_forward,
     vertical_tilt,
@@ -100,7 +101,6 @@ def infer_camera_edit(
     num_inference_steps,
     height,
     width,
-    prev_output=None,
     progress=gr.Progress(track_tqdm=True)
 ):
     prompt = build_camera_prompt(rotate_deg, move_forward, vertical_tilt, wideangle)
@@ -144,8 +144,13 @@ css = '''#col-container { max-width: 800px; margin: 0 auto; }
 .dark .progress-text{color: white !important}
 #examples{max-width: 800px; margin: 0 auto; }'''
 
+is_reset = gr.State(value=False)
+
 def reset_all():
-    return [0, 0, 0, 0]
+    return [0, 0, 0, 0, False, True]
+
+def end_reset():
+    return False
 
 def update_dimensions_on_upload(image):
     if image is None:
@@ -188,7 +193,7 @@ with gr.Blocks(theme=gr.themes.Citrus(), css=css) as demo:
                     rotate_deg = gr.Slider(label="Rotate Left–Right (degrees °)", minimum=-90, maximum=90, step=45, value=0)
                     move_forward = gr.Slider(label="Move Forward → Close-Up", minimum=0, maximum=10, step=5, value=0)
                     vertical_tilt = gr.Slider(label="Vertical Angle (Bird ↔ Worm)", minimum=-1, maximum=1, step=1, value=0)
-                    wideangle = gr.Slider(label="Wide-Angle Lens", minimum=0, maximum=1, step=1, value=0)
+                    wideangle = gr.Checkbox(label="Wide-Angle Lens", value=False)
                 with gr.Row():
                         reset_btn = gr.Button("Reset")
                         run_btn = gr.Button("Generate", variant="primary")
@@ -210,9 +215,9 @@ with gr.Blocks(theme=gr.themes.Citrus(), css=css) as demo:
                 #gr.Markdown("_Each change applies a fresh camera instruction to the last output image._")
 
     inputs = [
-        image, rotate_deg, move_forward,
+        image, prev_output, rotate_deg, move_forward,
         vertical_tilt, wideangle,
-        seed, randomize_seed, true_guidance_scale, num_inference_steps, height, width, prev_output
+        seed, randomize_seed, true_guidance_scale, num_inference_steps, height, width
     ]
     outputs = [result, seed, prompt_preview]
 
@@ -220,9 +225,9 @@ with gr.Blocks(theme=gr.themes.Citrus(), css=css) as demo:
     reset_btn.click(
         fn=reset_all,
         inputs=None,
-        outputs=[rotate_deg, move_forward, vertical_tilt, wideangle],
+        outputs=[rotate_deg, move_forward, vertical_tilt, wideangle, is_reset],
         queue=False
-    )
+    ).then(fn=end_reset, inputs=None, outputs=[is_reset], queue=False)
 
     # Manual generation
     run_event = run_btn.click(fn=infer_camera_edit, inputs=inputs, outputs=outputs)
@@ -234,11 +239,7 @@ with gr.Blocks(theme=gr.themes.Citrus(), css=css) as demo:
             ["monkey.jpg", None, -45, 5, 0, False, 0, True, 1.0, 4, 704, 1024],
             ["metropolis.jpg", None, 0, 0, -1, True, 0, True, 1.0, 4, 816, 1024],
         ],
-        inputs=[
-            image, rotate_deg, move_forward,
-            vertical_tilt, wideangle,
-            seed, randomize_seed, true_guidance_scale, num_inference_steps, height, width
-        ],
+        inputs=inputs,
         outputs=outputs,
         fn=infer_camera_edit,
         cache_examples="lazy",
@@ -253,21 +254,34 @@ with gr.Blocks(theme=gr.themes.Citrus(), css=css) as demo:
     ).then(
         fn=reset_all,
         inputs=None,
-        outputs=[rotate_deg, move_forward, vertical_tilt, wideangle],
+        outputs=[rotate_deg, move_forward, vertical_tilt, wideangle, is_reset],
+        queue=False
+    ).then(
+        fn=end_reset, 
+        inputs=None, 
+        outputs=[is_reset], 
         queue=False
     )
 
 
     # Live updates
-    control_inputs = [
-        image, rotate_deg, move_forward,
-        vertical_tilt, wideangle,
-        seed, randomize_seed, true_guidance_scale, num_inference_steps, height, width, prev_output
-    ]
+    def maybe_infer(is_reset, progress=gr.Progress(track_tqdm=True), *args):
+        if is_reset:
+            return gr.update(), gr.update(), gr.update()
+        else:
+            return infer_camera_edit(*args)
 
-    # All sliders use .release() to avoid triggering during reset
-    for control in [rotate_deg, move_forward, vertical_tilt, wideangle]:
-        control.release(fn=infer_camera_edit, inputs=control_inputs, outputs=outputs)
+    control_inputs = [
+        image, prev_output, rotate_deg, move_forward,
+        vertical_tilt, wideangle,
+        seed, randomize_seed, true_guidance_scale, num_inference_steps, height, width
+    ]
+    control_inputs_with_flag = [is_reset] + control_inputs
+
+    for control in [rotate_deg, move_forward, vertical_tilt]:
+        control.release(fn=maybe_infer, inputs=control_inputs_with_flag, outputs=outputs)
+    
+    wideangle.change(fn=maybe_infer, inputs=control_inputs_with_flag, outputs=outputs)
     
     run_event.then(lambda img, *_: img, inputs=[result], outputs=[prev_output])
 
