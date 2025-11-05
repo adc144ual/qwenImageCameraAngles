@@ -117,7 +117,7 @@ def infer_camera_edit(
             pil_images.append(image.convert("RGB"))
         elif hasattr(image, "name"):
             pil_images.append(Image.open(image.name).convert("RGB"))
-    elif prev_output is not None:
+    elif prev_output:
         pil_images.append(prev_output.convert("RGB"))
 
     if len(pil_images) == 0:
@@ -233,9 +233,9 @@ with gr.Blocks(theme=gr.themes.Citrus(), css=css) as demo:
     # Examples
     gr.Examples(
         examples=[
-            ["tool_of_the_sea.png", None, 45, 0, 0, False, 0, True, 1.0, 4, 568, 1024],
-            ["monkey.jpg", None, -45, 5, 0, False, 0, True, 1.0, 4, 704, 1024],
-            ["metropolis.jpg", None, 0, 0, -1, True, 0, True, 1.0, 4, 816, 1024],
+            ["tool_of_the_sea.png", "", 45, 0, 0, False, 0, True, 1.0, 4, 568, 1024],
+            ["monkey.jpg", "", -45, 5, 0, False, 0, True, 1.0, 4, 704, 1024],
+            ["metropolis.jpg", "", 0, 0, -1, True, 0, True, 1.0, 4, 816, 1024],
         ],
         inputs=inputs,
         outputs=outputs,
