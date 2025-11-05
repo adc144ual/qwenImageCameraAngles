@@ -245,7 +245,7 @@ with gr.Blocks(theme=gr.themes.Citrus(), css=css) as demo:
     )
     
     # Image upload triggers dimension update and control reset
-    image.change(
+    image.upload(
         fn=update_dimensions_on_upload,
         inputs=[image],
         outputs=[width, height]
