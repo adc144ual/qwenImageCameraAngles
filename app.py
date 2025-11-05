@@ -141,7 +141,8 @@ def infer_camera_edit(
 
 # --- UI ---
 css = '''#col-container { max-width: 800px; margin: 0 auto; }
-.dark .progress-text{color: white !important}'''
+.dark .progress-text{color: white !important}
+#examples{max-width: 800px; margin: 0 auto; }'''
 
 is_reset = gr.State(value=False)
 
@@ -238,10 +239,15 @@ with gr.Blocks(theme=gr.themes.Citrus(), css=css) as demo:
             ["monkey.jpg", None, -45, 5, 0, False, 0, True, 1.0, 4, 704, 1024],
             ["metropolis.jpg", None, 0, 0, -1, True, 0, True, 1.0, 4, 816, 1024],
         ],
-        inputs=inputs,
+        inputs=[
+            image, prev_output, rotate_deg, move_forward,
+            vertical_tilt, wideangle,
+            seed, randomize_seed, true_guidance_scale, num_inference_steps, height, width
+        ],
         outputs=outputs,
         fn=infer_camera_edit,
         cache_examples="lazy",
+        elem_id="examples"
     )
     
     # Image upload triggers dimension update and control reset
