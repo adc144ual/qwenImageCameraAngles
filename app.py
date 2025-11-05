@@ -215,7 +215,7 @@ with gr.Blocks(theme=gr.themes.Citrus(), css=css) as demo:
     inputs = [
         image,rotate_deg, move_forward,
         vertical_tilt, wideangle,
-        seed, randomize_seed, true_guidance_scale, num_inference_steps, height, width,  prev_output
+        seed, randomize_seed, true_guidance_scale, num_inference_steps, height, width, prev_output
     ]
     outputs = [result, seed, prompt_preview]
 
@@ -237,7 +237,9 @@ with gr.Blocks(theme=gr.themes.Citrus(), css=css) as demo:
             ["monkey.jpg", -45, 5, 0, False, 0, True, 1.0, 4, 704, 1024],
             ["metropolis.jpg", 0, 0, -1, True, 0, True, 1.0, 4, 816, 1024],
         ],
-        inputs=inputs,
+        inputs=[image,rotate_deg, move_forward,
+        vertical_tilt, wideangle,
+        seed, randomize_seed, true_guidance_scale, num_inference_steps, height, width],
         outputs=outputs,
         fn=infer_camera_edit,
         cache_examples="lazy",
