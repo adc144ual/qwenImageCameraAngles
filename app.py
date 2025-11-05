@@ -230,6 +230,19 @@ with gr.Blocks(theme=gr.themes.Citrus(), css=css) as demo:
 
     # Manual generation
     run_event = run_btn.click(fn=infer_camera_edit, inputs=inputs, outputs=outputs)
+
+    # Examples
+    gr.Examples(
+        examples=[
+            ["tool_of_the_sea.png", None, 45, 0, 0, False, 0, True, 1.0, 4, 568, 1024],
+            ["monkey.jpg", None, -45, 5, 0, False, 0, True, 1.0, 4, 704, 1024],
+            ["metropolis.jpg", None, 0, 0, -1, True, 0, True, 1.0, 4, 816, 1024],
+        ],
+        inputs=inputs,
+        outputs=outputs,
+        fn=infer_camera_edit,
+        cache_examples="lazy",
+    )
     
     # Image upload triggers dimension update and control reset
     image.change(
