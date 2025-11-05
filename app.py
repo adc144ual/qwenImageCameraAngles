@@ -186,7 +186,7 @@ with gr.Blocks(theme=gr.themes.Citrus(), css=css) as demo:
         with gr.Row():
             with gr.Column():
                 image = gr.Image(label="Input Image", type="pil", sources=["upload"])
-                prev_output = gr.State(value=None)
+                prev_output = gr.Image(value=None, visible=False)
                 is_reset = gr.State(value=False)
 
                 with gr.Tab("Camera Controls"):
