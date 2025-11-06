@@ -150,7 +150,7 @@ def infer_camera_edit(
 
     return result, seed, prompt
 
-def create_video_between_images(input_image, output_image, prompt: str) -> str:
+def create_video_between_images(input_image, output_image, prompt: str, request: gr.Request) -> str:
     """Create a video between the input and output images."""
     if input_image is None or output_image is None:
         raise gr.Error("Both input and output images are required to create a video.")
@@ -192,7 +192,8 @@ def create_video_between_images(input_image, output_image, prompt: str) -> str:
         video_path = _generate_video_segment(
             input_image_path, 
             output_image_path, 
-            prompt if prompt else "Camera movement transformation"
+            prompt if prompt else "Camera movement transformation",
+            request
         )
         return video_path
     except Exception as e:
