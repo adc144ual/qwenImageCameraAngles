@@ -184,8 +184,8 @@ def infer_camera_edit(
     randomize_seed: bool = True,
     true_guidance_scale: float = 1.0,
     num_inference_steps: int = 4,
-    height: int = 1024,
-    width: int = 1024,
+    height: Optional[int] = None,
+    width: Optional[int] = None,
     prev_output: Optional[Image.Image] = None,
     progress: gr.Progress = gr.Progress(track_tqdm=True)
 ) -> Tuple[Image.Image, int, str]:
@@ -632,4 +632,7 @@ with gr.Blocks(theme=gr.themes.Citrus(), css=css) as demo:
 
     run_event.then(lambda img, *_: img, inputs=[result], outputs=[prev_output])
 
-demo.launch(mcp_server=True)
+gr.api(infer_camera_edit, api_name="infer_edit_camera_angles")
+gr.api(create_video_between_images, api_name="create_video_between_images")
+
+demo.launch(mcp_server=True, show_api=True)
