@@ -632,4 +632,7 @@ with gr.Blocks(theme=gr.themes.Citrus(), css=css) as demo:
 
     run_event.then(lambda img, *_: img, inputs=[result], outputs=[prev_output])
 
-demo.launch(mcp_server=True)
+    gr.api(infer_camera_edit, api_name="infer_edit_camera_angles")
+    gr.api(create_video_between_images, api_name="create_video_between_images")
+
+demo.launch(mcp_server=True, show_api=True)
