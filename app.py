@@ -44,13 +44,9 @@ pipe.load_lora_weights(
     adapter_name="angles"
 )
 
-# pipe.load_lora_weights(
-#         "lovis93/next-scene-qwen-image-lora-2509", 
-#         weight_name="next-scene_lora-v2-3000.safetensors", adapter_name="next-scene"
-#     )
+
 pipe.set_adapters(["angles"], adapter_weights=[1.])
 pipe.fuse_lora(adapter_names=["angles"], lora_scale=1.25)
-# pipe.fuse_lora(adapter_names=["next-scene"], lora_scale=1.)
 pipe.unload_lora_weights()
 
 pipe.transformer.__class__ = QwenImageTransformer2DModel
@@ -187,7 +183,6 @@ def infer_camera_edit(
     height: Optional[int] = None,
     width: Optional[int] = None,
     prev_output: Optional[Image.Image] = None,
-    progress: gr.Progress = gr.Progress(track_tqdm=True)
 ) -> Tuple[Image.Image, int, str]:
     """
     Edit the camera angles/view of an image with Qwen Image Edit 2509 and dx8152's Qwen-Edit-2509-Multiple-angles LoRA.
@@ -231,9 +226,6 @@ def infer_camera_edit(
         prev_output (PIL.Image.Image | None, optional):
             Previous output image to use as input when no new image is uploaded.
             Defaults to None.
-        progress (gr.Progress, optional):
-            Gradio progress tracker, automatically provided by Gradio in the UI.
-            Defaults to a progress tracker with tqdm support.
 
     Returns:
         Tuple[PIL.Image.Image, int, str]:
@@ -241,6 +233,8 @@ def infer_camera_edit(
             - The actual seed used for generation.
             - The constructed camera prompt string.
     """
+    progress = gr.Progress(track_tqdm=True)
+    
     prompt = build_camera_prompt(rotate_deg, move_forward, vertical_tilt, wideangle)
     print(f"Generated Prompt: {prompt}")
 
@@ -632,7 +626,7 @@ with gr.Blocks(theme=gr.themes.Citrus(), css=css) as demo:
 
     run_event.then(lambda img, *_: img, inputs=[result], outputs=[prev_output])
 
-    # gr.api(infer_camera_edit, api_name="infer_edit_camera_angles")
-    # gr.api(create_video_between_images, api_name="create_video_between_images")
+    gr.api(infer_camera_edit, api_name="infer_edit_camera_angles")
+    gr.api(create_video_between_images, api_name="create_video_between_images")
 
 demo.launch(mcp_server=True, show_api=True)
