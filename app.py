@@ -569,7 +569,8 @@ with gr.Blocks() as demo:
         ],
         outputs=outputs,
         fn=infer_camera_edit,
-        cache_examples="lazy",
+        cache_examples=True,
+        cache_mode="lazy",
         elem_id="examples"
     )
 
