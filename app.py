@@ -400,7 +400,7 @@ def update_dimensions_on_upload(
     return new_width, new_height
 
 
-with gr.Blocks(theme=gr.themes.Citrus(), css=css) as demo:
+with gr.Blocks() as demo:
     with gr.Column(elem_id="col-container"):
         gr.Markdown("## 🎬 Qwen Image Edit — Camera Angle Control")
         gr.Markdown("""
@@ -494,7 +494,7 @@ with gr.Blocks(theme=gr.themes.Citrus(), css=css) as demo:
                 with gr.Group(visible=False) as video_group:
                     video_output = gr.Video(
                         label="Generated Video",
-                        show_download_button=True,
+                        buttons=["download"],
                         autoplay=True
                     )
 
@@ -545,12 +545,12 @@ with gr.Blocks(theme=gr.themes.Citrus(), css=css) as demo:
     create_video_button.click(
         fn=lambda: gr.update(visible=True),
         outputs=[video_group],
-        api_name=False
+        api_visibility="private"
     ).then(
         fn=create_video_between_images,
         inputs=[image, result, prompt_preview],
         outputs=[video_output],
-        api_name=False
+        api_visibility="private"
     )
 
     # Examples
@@ -629,4 +629,4 @@ with gr.Blocks(theme=gr.themes.Citrus(), css=css) as demo:
     gr.api(infer_camera_edit, api_name="infer_edit_camera_angles")
     gr.api(create_video_between_images, api_name="create_video_between_images")
 
-demo.launch(mcp_server=True, show_api=True)
+demo.launch(mcp_server=True, theme=gr.themes.Citrus(), css=css, footer_links=["api", "gradio", "settings"])
