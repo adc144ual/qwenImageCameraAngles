@@ -6,10 +6,10 @@ import spaces
 
 from PIL import Image
 from diffusers import FlowMatchEulerDiscreteScheduler
-from optimization import optimize_pipeline_
+# from optimization import optimize_pipeline_
 from qwenimage.pipeline_qwenimage_edit_plus import QwenImageEditPlusPipeline
 from qwenimage.transformer_qwenimage import QwenImageTransformer2DModel
-from qwenimage.qwen_fa3_processor import QwenDoubleStreamAttnProcessorFA3
+# from qwenimage.qwen_fa3_processor import QwenDoubleStreamAttnProcessorFA3
 
 import math
 from huggingface_hub import hf_hub_download
@@ -44,19 +44,20 @@ pipe.load_lora_weights(
     adapter_name="angles"
 )
 
-
 pipe.set_adapters(["angles"], adapter_weights=[1.])
 pipe.fuse_lora(adapter_names=["angles"], lora_scale=1.25)
 pipe.unload_lora_weights()
 
-pipe.transformer.__class__ = QwenImageTransformer2DModel
-pipe.transformer.set_attn_processor(QwenDoubleStreamAttnProcessorFA3())
+spaces.aoti_blocks_load(pipe.transformer, "zerogpu-aoti/Qwen-Image", variant="fa3")
 
-optimize_pipeline_(
-    pipe,
-    image=[Image.new("RGB", (1024, 1024)), Image.new("RGB", (1024, 1024))],
-    prompt="prompt"
-)
+#pipe.transformer.__class__ = QwenImageTransformer2DModel
+#pipe.transformer.set_attn_processor(QwenDoubleStreamAttnProcessorFA3())
+
+#optimize_pipeline_(
+#    pipe,
+#    image=[Image.new("RGB", (1024, 1024)), Image.new("RGB", (1024, 1024))],
+#    prompt="prompt"
+#)
 
 MAX_SEED = np.iinfo(np.int32).max
 

@@ -11,3 +11,4 @@ kernels
 torchvision
 peft
 torchao==0.11.0
+torch==2.8
