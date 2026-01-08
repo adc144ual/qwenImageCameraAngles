@@ -856,7 +856,7 @@ camera_3d_js = """
 """
 
 
-with gr.Blocks(css=css, theme=gr.themes.Soft()) as demo:
+with gr.Blocks() as demo:
     gr.Markdown("""
     # 🎬 Qwen Image Edit 2509 — 3D Camera Control
     
@@ -1141,7 +1141,7 @@ if __name__ == "__main__":
     demo.launch(
         head=three_js_head,
         mcp_server=True,
-        theme=gr.themes.Soft(),
+        theme=gr.themes.Citrus(),
         css=css,
         footer_links=["api", "gradio", "settings"]
     )
