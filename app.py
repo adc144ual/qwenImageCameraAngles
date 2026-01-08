@@ -756,7 +756,6 @@ css = '''
 .dark .progress-text { color: white !important; }
 #camera-3d-control { min-height: 400px; }
 #examples { max-width: 1100px; margin: 0 auto; }
-.fillable{max-width: 1100px !important}
 '''
 
 
@@ -792,7 +791,7 @@ def update_dimensions_on_upload(image: Optional[Image.Image]) -> Tuple[int, int]
     return new_width, new_height
 
 
-with gr.Blocks() as demo:
+with gr.Blocks(css=css, theme=gr.themes.Citrus()) as demo:
     gr.Markdown("""
     ## 🎬 Qwen Image Edit — Camera Angle Control
     
@@ -822,46 +821,6 @@ with gr.Blocks() as demo:
         # Right column: Sliders, output, and settings
         with gr.Column(scale=1):
             result = gr.Image(label="Output Image", interactive=False, height=350)
-        
-            with gr.Group(visible=False) as video_group:
-                video_output = gr.Video(
-                    label="Generated Video",
-                    buttons=["download"],
-                    autoplay=True
-                )
-                
-            with gr.Group():
-                gr.Markdown("### 🎚️ Slider Controls")
-                
-                with gr.Row():
-                    rotate_deg = gr.Slider(
-                        label="Rotate Right ↔ Left (°)",
-                        minimum=-90,
-                        maximum=90,
-                        step=45,
-                        value=0
-                    )
-                
-                with gr.Row():
-                    move_forward = gr.Slider(
-                        label="Move Forward → Close-Up",
-                        minimum=0,
-                        maximum=10,
-                        step=5,
-                        value=0
-                    )
-                
-                with gr.Row():
-                    vertical_tilt = gr.Slider(
-                        label="Vertical: Bird's-eye ↔ Worm's-eye",
-                        minimum=-1,
-                        maximum=1,
-                        step=1,
-                        value=0
-                    )
-                
-                wideangle = gr.Checkbox(label="🔭 Wide-Angle Lens", value=False)
-
             prompt_preview = gr.Textbox(label="Generated Prompt", interactive=False)
             
             create_video_button = gr.Button(
@@ -869,6 +828,43 @@ with gr.Blocks() as demo:
                 variant="secondary",
                 visible=False
             )
+            with gr.Group(visible=False) as video_group:
+                video_output = gr.Video(
+                    label="Generated Video",
+                    buttons=["download"],
+                    autoplay=True
+                )
+            
+            gr.Markdown("### 🎚️ Slider Controls")
+            
+            with gr.Row():
+                rotate_deg = gr.Slider(
+                    label="Rotate Right ↔ Left (°)",
+                    minimum=-90,
+                    maximum=90,
+                    step=45,
+                    value=0
+                )
+            
+            with gr.Row():
+                move_forward = gr.Slider(
+                    label="Move Forward → Close-Up",
+                    minimum=0,
+                    maximum=10,
+                    step=5,
+                    value=0
+                )
+            
+            with gr.Row():
+                vertical_tilt = gr.Slider(
+                    label="Vertical: Bird's-eye ↔ Worm's-eye",
+                    minimum=-1,
+                    maximum=1,
+                    step=1,
+                    value=0
+                )
+            
+            wideangle = gr.Checkbox(label="🔭 Wide-Angle Lens", value=False)
             
             with gr.Accordion("⚙️ Advanced Settings", open=False):
                 seed = gr.Slider(label="Seed", minimum=0, maximum=MAX_SEED, step=1, value=0)
@@ -923,6 +919,30 @@ with gr.Blocks() as demo:
         data_url = f"data:image/png;base64,{img_str}"
         return gr.update(imageUrl=data_url)
     
+    # Define inputs/outputs first (needed for event handlers)
+    inputs = [
+        image, rotate_deg, move_forward,
+        vertical_tilt, wideangle,
+        seed, randomize_seed, true_guidance_scale, num_inference_steps, height, width, prev_output
+    ]
+    outputs = [result, seed, prompt_preview]
+    
+    control_inputs = [
+        image, rotate_deg, move_forward,
+        vertical_tilt, wideangle,
+        seed, randomize_seed, true_guidance_scale, num_inference_steps, height, width, prev_output
+    ]
+    control_inputs_with_flag = [is_reset] + control_inputs
+    
+    # Live inference function
+    def maybe_infer(is_reset: bool, progress: gr.Progress = gr.Progress(track_tqdm=True), *args: Any):
+        if is_reset:
+            return gr.update(), gr.update(), gr.update(), gr.update()
+        else:
+            result_img, result_seed, result_prompt = infer_camera_edit(*args)
+            show_button = args[0] is not None and result_img is not None
+            return result_img, result_seed, result_prompt, gr.update(visible=show_button)
+    
     # Slider -> Prompt preview
     for slider in [rotate_deg, move_forward, vertical_tilt]:
         slider.change(
@@ -937,11 +957,15 @@ with gr.Blocks() as demo:
         outputs=[prompt_preview]
     )
     
-    # 3D control -> Sliders + Prompt
+    # 3D control -> Sliders + Prompt + Trigger inference
     camera_3d.change(
         fn=sync_3d_to_sliders,
         inputs=[camera_3d],
         outputs=[rotate_deg, move_forward, vertical_tilt, wideangle, prompt_preview]
+    ).then(
+        fn=maybe_infer,
+        inputs=control_inputs_with_flag,
+        outputs=outputs + [create_video_button]
     )
     
     # Sliders -> 3D control
@@ -980,13 +1004,6 @@ with gr.Blocks() as demo:
         result_img, result_seed, result_prompt = infer_camera_edit(*args)
         show_button = args[0] is not None and result_img is not None
         return result_img, result_seed, result_prompt, gr.update(visible=show_button)
-    
-    inputs = [
-        image, rotate_deg, move_forward,
-        vertical_tilt, wideangle,
-        seed, randomize_seed, true_guidance_scale, num_inference_steps, height, width, prev_output
-    ]
-    outputs = [result, seed, prompt_preview]
     
     run_event = run_btn.click(
         fn=infer_and_show_video_button,
@@ -1033,22 +1050,7 @@ with gr.Blocks() as demo:
         outputs=[camera_3d]
     )
     
-    # Live updates
-    def maybe_infer(is_reset: bool, progress: gr.Progress = gr.Progress(track_tqdm=True), *args: Any):
-        if is_reset:
-            return gr.update(), gr.update(), gr.update(), gr.update()
-        else:
-            result_img, result_seed, result_prompt = infer_camera_edit(*args)
-            show_button = args[0] is not None and result_img is not None
-            return result_img, result_seed, result_prompt, gr.update(visible=show_button)
-    
-    control_inputs = [
-        image, rotate_deg, move_forward,
-        vertical_tilt, wideangle,
-        seed, randomize_seed, true_guidance_scale, num_inference_steps, height, width, prev_output
-    ]
-    control_inputs_with_flag = [is_reset] + control_inputs
-    
+    # Live updates on slider release
     for control in [rotate_deg, move_forward, vertical_tilt]:
         control.release(
             fn=maybe_infer,
@@ -1064,7 +1066,28 @@ with gr.Blocks() as demo:
     
     run_event.then(lambda img, *_: img, inputs=[result], outputs=[prev_output])
     
-    # Examples
+    # Examples - wrapper function to also update 3D component
+    def infer_and_sync_3d(img, rot, fwd, tilt, wide, s, rand_s, cfg, steps, h, w):
+        result_img, result_seed, result_prompt = infer_camera_edit(
+            img, rot, fwd, tilt, wide, s, rand_s, cfg, steps, h, w, None
+        )
+        # Return the 3D component update along with results
+        camera_value = {"rotate_deg": rot, "move_forward": fwd, "vertical_tilt": tilt, "wideangle": wide}
+        
+        # Also update the 3D component's image
+        if img is not None:
+            import base64
+            from io import BytesIO
+            buffered = BytesIO()
+            img.save(buffered, format="PNG")
+            img_str = base64.b64encode(buffered.getvalue()).decode()
+            data_url = f"data:image/png;base64,{img_str}"
+            camera_update = gr.update(value=camera_value, imageUrl=data_url)
+        else:
+            camera_update = gr.update(value=camera_value)
+        
+        return result_img, result_seed, result_prompt, camera_update
+    
     gr.Examples(
         examples=[
             ["tool_of_the_sea.png", 90, 0, 0, False, 0, True, 1.0, 4, 568, 1024],
@@ -1078,8 +1101,8 @@ with gr.Blocks() as demo:
             vertical_tilt, wideangle,
             seed, randomize_seed, true_guidance_scale, num_inference_steps, height, width
         ],
-        outputs=outputs,
-        fn=infer_camera_edit,
+        outputs=outputs + [camera_3d],
+        fn=infer_and_sync_3d,
         cache_examples=True,
         cache_mode="lazy",
         elem_id="examples"
@@ -1090,4 +1113,4 @@ with gr.Blocks() as demo:
 
 if __name__ == "__main__":
     head = '<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>'
-    demo.launch(mcp_server=True, head=head, css=css, theme=gr.themes.Citrus(), footer_links=["api", "gradio", "settings"])
+    demo.launch(mcp_server=True, head=head, footer_links=["api", "gradio", "settings"])
