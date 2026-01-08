@@ -69,7 +69,7 @@ def _generate_video_segment(
     result = video_client.predict(
         start_image_pil=handle_file(input_image_path),
         end_image_pil=handle_file(output_image_path),
-        prompt=prompt if prompt else "Camera movement transformation",
+        prompt=prompt,
         api_name="/generate_video",
     )
     return result[0]["video"]
@@ -208,8 +208,569 @@ def create_video_between_images(
         raise gr.Error(f"Video generation failed: {e}")
 
 
+# --- 3D Camera Control Component for 2509 ---
+class CameraControl3D(gr.HTML):
+    """
+    A 3D camera control component using Three.js adapted for 2509's control scheme.
+    Controls: rotate_deg (-90 to 90), move_forward (0-10), vertical_tilt (-1 to 1), wideangle (bool)
+    """
+    def __init__(self, value=None, imageUrl=None, **kwargs):
+        if value is None:
+            value = {"rotate_deg": 0, "move_forward": 0, "vertical_tilt": 0, "wideangle": False}
+        
+        html_template = """
+        <div id="camera-control-wrapper" style="width: 100%; height: 400px; position: relative; background: #1a1a1a; border-radius: 12px; overflow: hidden;">
+            <div id="prompt-overlay" style="position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); padding: 8px 16px; border-radius: 8px; font-family: monospace; font-size: 11px; color: #00ff88; white-space: nowrap; z-index: 10; max-width: 90%; overflow: hidden; text-overflow: ellipsis;"></div>
+            <div id="control-legend" style="position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.7); padding: 8px 12px; border-radius: 8px; font-family: system-ui; font-size: 11px; color: #fff; z-index: 10;">
+                <div style="margin-bottom: 4px;"><span style="color: #00ff88;">●</span> Rotation (↔)</div>
+                <div style="margin-bottom: 4px;"><span style="color: #ff69b4;">●</span> Vertical Tilt (↕)</div>
+                <div><span style="color: #ffa500;">●</span> Distance/Zoom</div>
+            </div>
+        </div>
+        """
+        
+        js_on_load = """
+        (() => {
+            const wrapper = element.querySelector('#camera-control-wrapper');
+            const promptOverlay = element.querySelector('#prompt-overlay');
+            
+            const initScene = () => {
+                if (typeof THREE === 'undefined') {
+                    setTimeout(initScene, 100);
+                    return;
+                }
+                
+                // Scene setup
+                const scene = new THREE.Scene();
+                scene.background = new THREE.Color(0x1a1a1a);
+                
+                const camera = new THREE.PerspectiveCamera(50, wrapper.clientWidth / wrapper.clientHeight, 0.1, 1000);
+                camera.position.set(4, 3, 4);
+                camera.lookAt(0, 0.75, 0);
+                
+                const renderer = new THREE.WebGLRenderer({ antialias: true });
+                renderer.setSize(wrapper.clientWidth, wrapper.clientHeight);
+                renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+                wrapper.insertBefore(renderer.domElement, wrapper.firstChild);
+                
+                // Lighting
+                scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+                const dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
+                dirLight.position.set(5, 10, 5);
+                scene.add(dirLight);
+                
+                // Grid
+                scene.add(new THREE.GridHelper(6, 12, 0x333333, 0x222222));
+                
+                // Constants
+                const CENTER = new THREE.Vector3(0, 0.75, 0);
+                const BASE_DISTANCE = 2.0;
+                const ROTATION_RADIUS = 2.2;
+                const TILT_RADIUS = 1.6;
+                
+                // State - mapped from 2509 controls
+                let rotateDeg = props.value?.rotate_deg || 0;      // -90 to 90
+                let moveForward = props.value?.move_forward || 0;  // 0 to 10
+                let verticalTilt = props.value?.vertical_tilt || 0; // -1 to 1
+                let wideangle = props.value?.wideangle || false;
+                
+                // Valid steps for 2509
+                const rotateSteps = [-90, -45, 0, 45, 90];
+                const forwardSteps = [0, 5, 10];
+                const tiltSteps = [-1, 0, 1];
+                
+                function snapToNearest(value, steps) {
+                    return steps.reduce((prev, curr) => Math.abs(curr - value) < Math.abs(prev - value) ? curr : prev);
+                }
+                
+                // Create placeholder texture
+                function createPlaceholderTexture() {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = 256;
+                    canvas.height = 256;
+                    const ctx = canvas.getContext('2d');
+                    ctx.fillStyle = '#3a3a4a';
+                    ctx.fillRect(0, 0, 256, 256);
+                    ctx.fillStyle = '#ffcc99';
+                    ctx.beginPath();
+                    ctx.arc(128, 128, 80, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.fillStyle = '#333';
+                    ctx.beginPath();
+                    ctx.arc(100, 110, 10, 0, Math.PI * 2);
+                    ctx.arc(156, 110, 10, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.strokeStyle = '#333';
+                    ctx.lineWidth = 3;
+                    ctx.beginPath();
+                    ctx.arc(128, 130, 35, 0.2, Math.PI - 0.2);
+                    ctx.stroke();
+                    return new THREE.CanvasTexture(canvas);
+                }
+                
+                // Target image plane
+                let currentTexture = createPlaceholderTexture();
+                const planeMaterial = new THREE.MeshBasicMaterial({ map: currentTexture, side: THREE.DoubleSide });
+                let targetPlane = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 1.2), planeMaterial);
+                targetPlane.position.copy(CENTER);
+                scene.add(targetPlane);
+                
+                // Function to update texture from image URL
+                function updateTextureFromUrl(url) {
+                    if (!url) {
+                        planeMaterial.map = createPlaceholderTexture();
+                        planeMaterial.needsUpdate = true;
+                        scene.remove(targetPlane);
+                        targetPlane = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 1.2), planeMaterial);
+                        targetPlane.position.copy(CENTER);
+                        scene.add(targetPlane);
+                        return;
+                    }
+                    
+                    const loader = new THREE.TextureLoader();
+                    loader.crossOrigin = 'anonymous';
+                    loader.load(url, (texture) => {
+                        texture.minFilter = THREE.LinearFilter;
+                        texture.magFilter = THREE.LinearFilter;
+                        planeMaterial.map = texture;
+                        planeMaterial.needsUpdate = true;
+                        
+                        const img = texture.image;
+                        if (img && img.width && img.height) {
+                            const aspect = img.width / img.height;
+                            const maxSize = 1.4;
+                            let planeWidth, planeHeight;
+                            if (aspect > 1) {
+                                planeWidth = maxSize;
+                                planeHeight = maxSize / aspect;
+                            } else {
+                                planeHeight = maxSize;
+                                planeWidth = maxSize * aspect;
+                            }
+                            scene.remove(targetPlane);
+                            targetPlane = new THREE.Mesh(
+                                new THREE.PlaneGeometry(planeWidth, planeHeight),
+                                planeMaterial
+                            );
+                            targetPlane.position.copy(CENTER);
+                            scene.add(targetPlane);
+                        }
+                    });
+                }
+                
+                if (props.imageUrl) {
+                    updateTextureFromUrl(props.imageUrl);
+                }
+                
+                // Camera model
+                const cameraGroup = new THREE.Group();
+                const bodyMat = new THREE.MeshStandardMaterial({ color: 0x6699cc, metalness: 0.5, roughness: 0.3 });
+                const body = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.2, 0.35), bodyMat);
+                cameraGroup.add(body);
+                const lens = new THREE.Mesh(
+                    new THREE.CylinderGeometry(0.08, 0.1, 0.16, 16),
+                    new THREE.MeshStandardMaterial({ color: 0x6699cc, metalness: 0.5, roughness: 0.3 })
+                );
+                lens.rotation.x = Math.PI / 2;
+                lens.position.z = 0.24;
+                cameraGroup.add(lens);
+                scene.add(cameraGroup);
+                
+                // GREEN: Rotation arc (horizontal) - maps to rotate_deg (-90 to 90)
+                const rotationArcPoints = [];
+                for (let i = 0; i <= 32; i++) {
+                    const angle = THREE.MathUtils.degToRad(-90 + (180 * i / 32));
+                    rotationArcPoints.push(new THREE.Vector3(
+                        ROTATION_RADIUS * Math.sin(angle),
+                        0.05,
+                        ROTATION_RADIUS * Math.cos(angle)
+                    ));
+                }
+                const rotationCurve = new THREE.CatmullRomCurve3(rotationArcPoints);
+                const rotationArc = new THREE.Mesh(
+                    new THREE.TubeGeometry(rotationCurve, 32, 0.035, 8, false),
+                    new THREE.MeshStandardMaterial({ color: 0x00ff88, emissive: 0x00ff88, emissiveIntensity: 0.3 })
+                );
+                scene.add(rotationArc);
+                
+                const rotationHandle = new THREE.Mesh(
+                    new THREE.SphereGeometry(0.16, 16, 16),
+                    new THREE.MeshStandardMaterial({ color: 0x00ff88, emissive: 0x00ff88, emissiveIntensity: 0.5 })
+                );
+                rotationHandle.userData.type = 'rotation';
+                scene.add(rotationHandle);
+                
+                // PINK: Vertical tilt arc - maps to vertical_tilt (-1 to 1)
+                const tiltArcPoints = [];
+                for (let i = 0; i <= 32; i++) {
+                    const angle = THREE.MathUtils.degToRad(-45 + (90 * i / 32));
+                    tiltArcPoints.push(new THREE.Vector3(
+                        -0.7,
+                        TILT_RADIUS * Math.sin(angle) + CENTER.y,
+                        TILT_RADIUS * Math.cos(angle)
+                    ));
+                }
+                const tiltCurve = new THREE.CatmullRomCurve3(tiltArcPoints);
+                const tiltArc = new THREE.Mesh(
+                    new THREE.TubeGeometry(tiltCurve, 32, 0.035, 8, false),
+                    new THREE.MeshStandardMaterial({ color: 0xff69b4, emissive: 0xff69b4, emissiveIntensity: 0.3 })
+                );
+                scene.add(tiltArc);
+                
+                const tiltHandle = new THREE.Mesh(
+                    new THREE.SphereGeometry(0.16, 16, 16),
+                    new THREE.MeshStandardMaterial({ color: 0xff69b4, emissive: 0xff69b4, emissiveIntensity: 0.5 })
+                );
+                tiltHandle.userData.type = 'tilt';
+                scene.add(tiltHandle);
+                
+                // ORANGE: Distance line & handle - maps to move_forward (0-10)
+                const distanceLineGeo = new THREE.BufferGeometry();
+                const distanceLine = new THREE.Line(distanceLineGeo, new THREE.LineBasicMaterial({ color: 0xffa500, linewidth: 2 }));
+                scene.add(distanceLine);
+                
+                const distanceHandle = new THREE.Mesh(
+                    new THREE.SphereGeometry(0.16, 16, 16),
+                    new THREE.MeshStandardMaterial({ color: 0xffa500, emissive: 0xffa500, emissiveIntensity: 0.5 })
+                );
+                distanceHandle.userData.type = 'distance';
+                scene.add(distanceHandle);
+                
+                function buildPromptText(rot, fwd, tilt, wide) {
+                    const parts = [];
+                    if (rot !== 0) {
+                        const dir = rot > 0 ? 'left' : 'right';
+                        parts.push(`Rotate ${Math.abs(rot)}° ${dir}`);
+                    }
+                    if (fwd > 5) {
+                        parts.push('Close-up');
+                    } else if (fwd >= 1) {
+                        parts.push('Move forward');
+                    }
+                    if (tilt <= -1) {
+                        parts.push("Bird's-eye");
+                    } else if (tilt >= 1) {
+                        parts.push("Worm's-eye");
+                    }
+                    if (wide) {
+                        parts.push('Wide-angle');
+                    }
+                    return parts.length > 0 ? parts.join(' • ') : 'No camera movement';
+                }
+                
+                function updatePositions() {
+                    // Map controls to 3D positions
+                    // rotateDeg: -90 (right) to 90 (left) -> camera orbits around subject
+                    // Note: positive rotateDeg = rotate left = camera moves right
+                    const rotRad = THREE.MathUtils.degToRad(-rotateDeg);
+                    
+                    // moveForward: 0 to 10 -> distance from 2.0 to 1.0
+                    const distance = BASE_DISTANCE - (moveForward / 10) * 1.0;
+                    
+                    // verticalTilt: -1 (bird's eye) to 1 (worm's eye) -> elevation angle
+                    const tiltAngle = verticalTilt * 35; // -35 to 35 degrees
+                    const tiltRad = THREE.MathUtils.degToRad(tiltAngle);
+                    
+                    // Camera position
+                    const camX = distance * Math.sin(rotRad) * Math.cos(tiltRad);
+                    const camY = distance * Math.sin(tiltRad) + CENTER.y;
+                    const camZ = distance * Math.cos(rotRad) * Math.cos(tiltRad);
+                    
+                    cameraGroup.position.set(camX, camY, camZ);
+                    cameraGroup.lookAt(CENTER);
+                    
+                    // Update handles
+                    rotationHandle.position.set(
+                        ROTATION_RADIUS * Math.sin(rotRad),
+                        0.05,
+                        ROTATION_RADIUS * Math.cos(rotRad)
+                    );
+                    
+                    const tiltHandleAngle = THREE.MathUtils.degToRad(tiltAngle);
+                    tiltHandle.position.set(
+                        -0.7,
+                        TILT_RADIUS * Math.sin(tiltHandleAngle) + CENTER.y,
+                        TILT_RADIUS * Math.cos(tiltHandleAngle)
+                    );
+                    
+                    // Distance handle - positioned along the line from camera to center
+                    const handleDist = distance - 0.4;
+                    distanceHandle.position.set(
+                        handleDist * Math.sin(rotRad) * Math.cos(tiltRad),
+                        handleDist * Math.sin(tiltRad) + CENTER.y,
+                        handleDist * Math.cos(rotRad) * Math.cos(tiltRad)
+                    );
+                    distanceLineGeo.setFromPoints([cameraGroup.position.clone(), CENTER.clone()]);
+                    
+                    // Update prompt overlay
+                    promptOverlay.textContent = buildPromptText(rotateDeg, moveForward, verticalTilt, wideangle);
+                }
+                
+                function updatePropsAndTrigger() {
+                    const rotSnap = snapToNearest(rotateDeg, rotateSteps);
+                    const fwdSnap = snapToNearest(moveForward, forwardSteps);
+                    const tiltSnap = snapToNearest(verticalTilt, tiltSteps);
+                    
+                    props.value = {
+                        rotate_deg: rotSnap,
+                        move_forward: fwdSnap,
+                        vertical_tilt: tiltSnap,
+                        wideangle: wideangle
+                    };
+                    trigger('change', props.value);
+                }
+                
+                // Raycasting
+                const raycaster = new THREE.Raycaster();
+                const mouse = new THREE.Vector2();
+                let isDragging = false;
+                let dragTarget = null;
+                let dragStartMouse = new THREE.Vector2();
+                let dragStartForward = 0;
+                const intersection = new THREE.Vector3();
+                
+                const canvas = renderer.domElement;
+                
+                canvas.addEventListener('mousedown', (e) => {
+                    const rect = canvas.getBoundingClientRect();
+                    mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+                    mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+                    
+                    raycaster.setFromCamera(mouse, camera);
+                    const intersects = raycaster.intersectObjects([rotationHandle, tiltHandle, distanceHandle]);
+                    
+                    if (intersects.length > 0) {
+                        isDragging = true;
+                        dragTarget = intersects[0].object;
+                        dragTarget.material.emissiveIntensity = 1.0;
+                        dragTarget.scale.setScalar(1.3);
+                        dragStartMouse.copy(mouse);
+                        dragStartForward = moveForward;
+                        canvas.style.cursor = 'grabbing';
+                    }
+                });
+                
+                canvas.addEventListener('mousemove', (e) => {
+                    const rect = canvas.getBoundingClientRect();
+                    mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+                    mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+                    
+                    if (isDragging && dragTarget) {
+                        raycaster.setFromCamera(mouse, camera);
+                        
+                        if (dragTarget.userData.type === 'rotation') {
+                            const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -0.05);
+                            if (raycaster.ray.intersectPlane(plane, intersection)) {
+                                let angle = THREE.MathUtils.radToDeg(Math.atan2(intersection.x, intersection.z));
+                                // Clamp to -90 to 90 range and invert for proper left/right
+                                rotateDeg = THREE.MathUtils.clamp(-angle, -90, 90);
+                            }
+                        } else if (dragTarget.userData.type === 'tilt') {
+                            const plane = new THREE.Plane(new THREE.Vector3(1, 0, 0), 0.7);
+                            if (raycaster.ray.intersectPlane(plane, intersection)) {
+                                const relY = intersection.y - CENTER.y;
+                                const relZ = intersection.z;
+                                const angle = THREE.MathUtils.radToDeg(Math.atan2(relY, relZ));
+                                // Map angle to -1 to 1 range
+                                verticalTilt = THREE.MathUtils.clamp(angle / 35, -1, 1);
+                            }
+                        } else if (dragTarget.userData.type === 'distance') {
+                            const deltaY = mouse.y - dragStartMouse.y;
+                            // Dragging up = forward (closer), dragging down = back
+                            moveForward = THREE.MathUtils.clamp(dragStartForward + deltaY * 12, 0, 10);
+                        }
+                        updatePositions();
+                    } else {
+                        raycaster.setFromCamera(mouse, camera);
+                        const intersects = raycaster.intersectObjects([rotationHandle, tiltHandle, distanceHandle]);
+                        [rotationHandle, tiltHandle, distanceHandle].forEach(h => {
+                            h.material.emissiveIntensity = 0.5;
+                            h.scale.setScalar(1);
+                        });
+                        if (intersects.length > 0) {
+                            intersects[0].object.material.emissiveIntensity = 0.8;
+                            intersects[0].object.scale.setScalar(1.1);
+                            canvas.style.cursor = 'grab';
+                        } else {
+                            canvas.style.cursor = 'default';
+                        }
+                    }
+                });
+                
+                const onMouseUp = () => {
+                    if (dragTarget) {
+                        dragTarget.material.emissiveIntensity = 0.5;
+                        dragTarget.scale.setScalar(1);
+                        
+                        // Snap and animate
+                        const targetRot = snapToNearest(rotateDeg, rotateSteps);
+                        const targetFwd = snapToNearest(moveForward, forwardSteps);
+                        const targetTilt = snapToNearest(verticalTilt, tiltSteps);
+                        
+                        const startRot = rotateDeg, startFwd = moveForward, startTilt = verticalTilt;
+                        const startTime = Date.now();
+                        
+                        function animateSnap() {
+                            const t = Math.min((Date.now() - startTime) / 200, 1);
+                            const ease = 1 - Math.pow(1 - t, 3);
+                            
+                            rotateDeg = startRot + (targetRot - startRot) * ease;
+                            moveForward = startFwd + (targetFwd - startFwd) * ease;
+                            verticalTilt = startTilt + (targetTilt - startTilt) * ease;
+                            
+                            updatePositions();
+                            if (t < 1) requestAnimationFrame(animateSnap);
+                            else updatePropsAndTrigger();
+                        }
+                        animateSnap();
+                    }
+                    isDragging = false;
+                    dragTarget = null;
+                    canvas.style.cursor = 'default';
+                };
+                
+                canvas.addEventListener('mouseup', onMouseUp);
+                canvas.addEventListener('mouseleave', onMouseUp);
+
+                // Touch support
+                canvas.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    const touch = e.touches[0];
+                    const rect = canvas.getBoundingClientRect();
+                    mouse.x = ((touch.clientX - rect.left) / rect.width) * 2 - 1;
+                    mouse.y = -((touch.clientY - rect.top) / rect.height) * 2 + 1;
+                    
+                    raycaster.setFromCamera(mouse, camera);
+                    const intersects = raycaster.intersectObjects([rotationHandle, tiltHandle, distanceHandle]);
+                    
+                    if (intersects.length > 0) {
+                        isDragging = true;
+                        dragTarget = intersects[0].object;
+                        dragTarget.material.emissiveIntensity = 1.0;
+                        dragTarget.scale.setScalar(1.3);
+                        dragStartMouse.copy(mouse);
+                        dragStartForward = moveForward;
+                    }
+                }, { passive: false });
+                
+                canvas.addEventListener('touchmove', (e) => {
+                    e.preventDefault();
+                    const touch = e.touches[0];
+                    const rect = canvas.getBoundingClientRect();
+                    mouse.x = ((touch.clientX - rect.left) / rect.width) * 2 - 1;
+                    mouse.y = -((touch.clientY - rect.top) / rect.height) * 2 + 1;
+                    
+                    if (isDragging && dragTarget) {
+                        raycaster.setFromCamera(mouse, camera);
+                        
+                        if (dragTarget.userData.type === 'rotation') {
+                            const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -0.05);
+                            if (raycaster.ray.intersectPlane(plane, intersection)) {
+                                let angle = THREE.MathUtils.radToDeg(Math.atan2(intersection.x, intersection.z));
+                                rotateDeg = THREE.MathUtils.clamp(-angle, -90, 90);
+                            }
+                        } else if (dragTarget.userData.type === 'tilt') {
+                            const plane = new THREE.Plane(new THREE.Vector3(1, 0, 0), 0.7);
+                            if (raycaster.ray.intersectPlane(plane, intersection)) {
+                                const relY = intersection.y - CENTER.y;
+                                const relZ = intersection.z;
+                                const angle = THREE.MathUtils.radToDeg(Math.atan2(relY, relZ));
+                                verticalTilt = THREE.MathUtils.clamp(angle / 35, -1, 1);
+                            }
+                        } else if (dragTarget.userData.type === 'distance') {
+                            const deltaY = mouse.y - dragStartMouse.y;
+                            moveForward = THREE.MathUtils.clamp(dragStartForward + deltaY * 12, 0, 10);
+                        }
+                        updatePositions();
+                    }
+                }, { passive: false });
+                
+                canvas.addEventListener('touchend', (e) => {
+                    e.preventDefault();
+                    onMouseUp();
+                }, { passive: false });
+                
+                canvas.addEventListener('touchcancel', (e) => {
+                    e.preventDefault();
+                    onMouseUp();
+                }, { passive: false });
+                
+                // Initial update
+                updatePositions();
+                
+                // Render loop
+                function render() {
+                    requestAnimationFrame(render);
+                    renderer.render(scene, camera);
+                }
+                render();
+                
+                // Handle resize
+                new ResizeObserver(() => {
+                    camera.aspect = wrapper.clientWidth / wrapper.clientHeight;
+                    camera.updateProjectionMatrix();
+                    renderer.setSize(wrapper.clientWidth, wrapper.clientHeight);
+                }).observe(wrapper);
+                
+                // Store update functions
+                wrapper._updateTexture = updateTextureFromUrl;
+                
+                // Watch for prop changes
+                let lastImageUrl = props.imageUrl;
+                let lastValue = JSON.stringify(props.value);
+                setInterval(() => {
+                    if (props.imageUrl !== lastImageUrl) {
+                        lastImageUrl = props.imageUrl;
+                        updateTextureFromUrl(props.imageUrl);
+                    }
+                    const currentValue = JSON.stringify(props.value);
+                    if (currentValue !== lastValue) {
+                        lastValue = currentValue;
+                        if (props.value && typeof props.value === 'object') {
+                            rotateDeg = props.value.rotate_deg ?? rotateDeg;
+                            moveForward = props.value.move_forward ?? moveForward;
+                            verticalTilt = props.value.vertical_tilt ?? verticalTilt;
+                            wideangle = props.value.wideangle ?? wideangle;
+                            updatePositions();
+                        }
+                    }
+                }, 100);
+            };
+            
+            initScene();
+        })();
+        """
+        
+        super().__init__(
+            value=value,
+            html_template=html_template,
+            js_on_load=js_on_load,
+            imageUrl=imageUrl,
+            **kwargs
+        )
+
+
+# --- UI ---
+css = '''
+#col-container { max-width: 1100px; margin: 0 auto; }
+.dark .progress-text { color: white !important; }
+#camera-3d-control { min-height: 400px; }
+#examples { max-width: 1100px; margin: 0 auto; }
+'''
+
+
+def reset_all() -> list:
+    """Reset all camera control knobs and flags to their default values."""
+    return [0, 0, 0, False, True]
+
+
+def end_reset() -> bool:
+    """Mark the end of a reset cycle."""
+    return False
+
+
 def update_dimensions_on_upload(image: Optional[Image.Image]) -> Tuple[int, int]:
-    """Compute recommended dimensions preserving aspect ratio."""
+    """Compute recommended (width, height) for the output resolution."""
     if image is None:
         return 1024, 1024
 
@@ -230,722 +791,101 @@ def update_dimensions_on_upload(image: Optional[Image.Image]) -> Tuple[int, int]
     return new_width, new_height
 
 
-def reset_all() -> list:
-    """Reset all camera control knobs and flags to their default values."""
-    return [0, 0, 0, False, True]
-
-
-def end_reset() -> bool:
-    """Mark the end of a reset cycle."""
-    return False
-
-
-# --- UI ---
-css = '''
-#col-container { max-width: 1200px; margin: 0 auto; }
-.dark .progress-text { color: white !important; }
-#camera-3d-control { min-height: 450px; }
-#examples { max-width: 1200px; margin: 0 auto; }
-
-/* Custom styling for the 3D control */
-.camera-3d-wrapper {
-    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-    border-radius: 16px;
-    overflow: hidden;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-}
-
-.control-legend {
-    display: flex;
-    gap: 16px;
-    justify-content: center;
-    padding: 12px;
-    background: rgba(0, 0, 0, 0.3);
-    border-radius: 8px;
-    margin-top: 8px;
-}
-
-.legend-item {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 13px;
-    color: #e0e0e0;
-}
-
-.legend-dot {
-    width: 12px;
-    height: 12px;
-    border-radius: 50%;
-}
-
-.legend-dot.rotation { background: #00ff88; }
-.legend-dot.tilt { background: #ff69b4; }
-.legend-dot.zoom { background: #ffa500; }
-'''
-
-# Three.js script to load
-three_js_head = '<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>'
-
-# 3D Camera Control HTML Component
-camera_3d_html = """
-<div id="camera-control-wrapper" style="width: 100%; height: 400px; position: relative; background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); border-radius: 12px; overflow: hidden;">
-    <div id="prompt-overlay" style="position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.85); padding: 10px 20px; border-radius: 10px; font-family: 'SF Mono', 'Consolas', monospace; font-size: 11px; color: #00ff88; white-space: nowrap; z-index: 10; border: 1px solid rgba(0, 255, 136, 0.3); max-width: 90%; overflow: hidden; text-overflow: ellipsis;"></div>
-    <div id="instructions-overlay" style="position: absolute; top: 10px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.7); padding: 8px 16px; border-radius: 8px; font-size: 12px; color: #aaa; z-index: 10;">Drag handles to control camera</div>
-</div>
-<div style="display: flex; gap: 20px; justify-content: center; padding: 12px; background: rgba(0, 0, 0, 0.2); border-radius: 0 0 12px 12px;">
-    <div style="display: flex; align-items: center; gap: 6px; font-size: 13px; color: #e0e0e0;">
-        <div style="width: 14px; height: 14px; border-radius: 50%; background: #00ff88; box-shadow: 0 0 8px #00ff88;"></div>
-        <span>Rotation</span>
-    </div>
-    <div style="display: flex; align-items: center; gap: 6px; font-size: 13px; color: #e0e0e0;">
-        <div style="width: 14px; height: 14px; border-radius: 50%; background: #ff69b4; box-shadow: 0 0 8px #ff69b4;"></div>
-        <span>Vertical Tilt</span>
-    </div>
-    <div style="display: flex; align-items: center; gap: 6px; font-size: 13px; color: #e0e0e0;">
-        <div style="width: 14px; height: 14px; border-radius: 50%; background: #ffa500; box-shadow: 0 0 8px #ffa500;"></div>
-        <span>Zoom/Distance</span>
-    </div>
-</div>
-"""
-
-camera_3d_js = """
-() => {
-    const wrapper = element.querySelector('#camera-control-wrapper');
-    const promptOverlay = element.querySelector('#prompt-overlay');
-    const instructionsOverlay = element.querySelector('#instructions-overlay');
-    
-    // Hide instructions after 3 seconds
-    setTimeout(() => {
-        if (instructionsOverlay) {
-            instructionsOverlay.style.opacity = '0';
-            instructionsOverlay.style.transition = 'opacity 0.5s';
-            setTimeout(() => instructionsOverlay.remove(), 500);
-        }
-    }, 3000);
-    
-    const initScene = () => {
-        if (typeof THREE === 'undefined') {
-            setTimeout(initScene, 100);
-            return;
-        }
-        
-        // Scene setup
-        const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x1a1a2e);
-        
-        const camera = new THREE.PerspectiveCamera(50, wrapper.clientWidth / wrapper.clientHeight, 0.1, 1000);
-        camera.position.set(4.5, 3, 4.5);
-        camera.lookAt(0, 0.75, 0);
-        
-        const renderer = new THREE.WebGLRenderer({ antialias: true });
-        renderer.setSize(wrapper.clientWidth, wrapper.clientHeight);
-        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-        wrapper.insertBefore(renderer.domElement, promptOverlay);
-        
-        // Lighting
-        scene.add(new THREE.AmbientLight(0xffffff, 0.5));
-        const dirLight = new THREE.DirectionalLight(0xffffff, 0.7);
-        dirLight.position.set(5, 10, 5);
-        scene.add(dirLight);
-        
-        // Grid with custom colors
-        const grid = new THREE.GridHelper(8, 16, 0x2a2a4a, 0x1f1f3a);
-        scene.add(grid);
-        
-        // Constants
-        const CENTER = new THREE.Vector3(0, 0.75, 0);
-        const BASE_DISTANCE = 1.8;
-        const ROTATION_RADIUS = 2.4;
-        const TILT_RADIUS = 1.8;
-        
-        // State - mapped to 2509 control values
-        let rotationAngle = 0;      // -90 to 90 degrees (maps to rotate_deg)
-        let verticalTilt = 0;       // -1 to 1 (maps to vertical_tilt)
-        let zoomLevel = 0;          // 0, 5, 10 (maps to move_forward)
-        
-        // Snap values for 2509 LoRA
-        const rotationSteps = [-90, -45, 0, 45, 90];
-        const tiltSteps = [-1, 0, 1];
-        const zoomSteps = [0, 5, 10];
-        
-        function snapToNearest(value, steps) {
-            return steps.reduce((prev, curr) => Math.abs(curr - value) < Math.abs(prev - value) ? curr : prev);
-        }
-        
-        // Create placeholder texture
-        function createPlaceholderTexture() {
-            const canvas = document.createElement('canvas');
-            canvas.width = 256;
-            canvas.height = 256;
-            const ctx = canvas.getContext('2d');
-            
-            // Background gradient
-            const gradient = ctx.createLinearGradient(0, 0, 256, 256);
-            gradient.addColorStop(0, '#3a3a5a');
-            gradient.addColorStop(1, '#2a2a4a');
-            ctx.fillStyle = gradient;
-            ctx.fillRect(0, 0, 256, 256);
-            
-            // Simple face placeholder
-            ctx.fillStyle = '#ffcc99';
-            ctx.beginPath();
-            ctx.arc(128, 128, 70, 0, Math.PI * 2);
-            ctx.fill();
-            
-            // Eyes
-            ctx.fillStyle = '#333';
-            ctx.beginPath();
-            ctx.arc(105, 115, 8, 0, Math.PI * 2);
-            ctx.arc(151, 115, 8, 0, Math.PI * 2);
-            ctx.fill();
-            
-            // Smile
-            ctx.strokeStyle = '#333';
-            ctx.lineWidth = 3;
-            ctx.beginPath();
-            ctx.arc(128, 125, 30, 0.2, Math.PI - 0.2);
-            ctx.stroke();
-            
-            // Border
-            ctx.strokeStyle = '#555';
-            ctx.lineWidth = 4;
-            ctx.strokeRect(2, 2, 252, 252);
-            
-            return new THREE.CanvasTexture(canvas);
-        }
-        
-        // Target image plane
-        let currentTexture = createPlaceholderTexture();
-        const planeMaterial = new THREE.MeshBasicMaterial({ map: currentTexture, side: THREE.DoubleSide });
-        let targetPlane = new THREE.Mesh(new THREE.PlaneGeometry(1.3, 1.3), planeMaterial);
-        targetPlane.position.copy(CENTER);
-        scene.add(targetPlane);
-        
-        // Function to update texture from image URL
-        function updateTextureFromUrl(url) {
-            if (!url) {
-                planeMaterial.map = createPlaceholderTexture();
-                planeMaterial.needsUpdate = true;
-                scene.remove(targetPlane);
-                targetPlane = new THREE.Mesh(new THREE.PlaneGeometry(1.3, 1.3), planeMaterial);
-                targetPlane.position.copy(CENTER);
-                scene.add(targetPlane);
-                return;
-            }
-            
-            const loader = new THREE.TextureLoader();
-            loader.crossOrigin = 'anonymous';
-            loader.load(url, (texture) => {
-                texture.minFilter = THREE.LinearFilter;
-                texture.magFilter = THREE.LinearFilter;
-                planeMaterial.map = texture;
-                planeMaterial.needsUpdate = true;
-                
-                const img = texture.image;
-                if (img && img.width && img.height) {
-                    const aspect = img.width / img.height;
-                    const maxSize = 1.5;
-                    let planeWidth, planeHeight;
-                    if (aspect > 1) {
-                        planeWidth = maxSize;
-                        planeHeight = maxSize / aspect;
-                    } else {
-                        planeHeight = maxSize;
-                        planeWidth = maxSize * aspect;
-                    }
-                    scene.remove(targetPlane);
-                    targetPlane = new THREE.Mesh(
-                        new THREE.PlaneGeometry(planeWidth, planeHeight),
-                        planeMaterial
-                    );
-                    targetPlane.position.copy(CENTER);
-                    scene.add(targetPlane);
-                }
-            });
-        }
-        
-        // Check for initial imageUrl
-        if (props.imageUrl) {
-            updateTextureFromUrl(props.imageUrl);
-        }
-        
-        // Camera model (stylized)
-        const cameraGroup = new THREE.Group();
-        const bodyMat = new THREE.MeshStandardMaterial({ color: 0x5588bb, metalness: 0.6, roughness: 0.3 });
-        const body = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.2, 0.35), bodyMat);
-        cameraGroup.add(body);
-        
-        const lens = new THREE.Mesh(
-            new THREE.CylinderGeometry(0.08, 0.1, 0.16, 16),
-            new THREE.MeshStandardMaterial({ color: 0x334455, metalness: 0.7, roughness: 0.2 })
-        );
-        lens.rotation.x = Math.PI / 2;
-        lens.position.z = 0.24;
-        cameraGroup.add(lens);
-        
-        // Lens glass
-        const lensGlass = new THREE.Mesh(
-            new THREE.CircleGeometry(0.06, 16),
-            new THREE.MeshStandardMaterial({ color: 0x88aaff, metalness: 0.9, roughness: 0.1 })
-        );
-        lensGlass.position.z = 0.33;
-        cameraGroup.add(lensGlass);
-        
-        scene.add(cameraGroup);
-        
-        // GREEN: Rotation ring (horizontal)
-        const rotationRing = new THREE.Mesh(
-            new THREE.TorusGeometry(ROTATION_RADIUS, 0.035, 16, 64),
-            new THREE.MeshStandardMaterial({ color: 0x00ff88, emissive: 0x00ff88, emissiveIntensity: 0.4 })
-        );
-        rotationRing.rotation.x = Math.PI / 2;
-        rotationRing.position.y = 0.05;
-        scene.add(rotationRing);
-        
-        const rotationHandle = new THREE.Mesh(
-            new THREE.SphereGeometry(0.16, 16, 16),
-            new THREE.MeshStandardMaterial({ color: 0x00ff88, emissive: 0x00ff88, emissiveIntensity: 0.6 })
-        );
-        rotationHandle.userData.type = 'rotation';
-        scene.add(rotationHandle);
-        
-        // PINK: Vertical tilt arc
-        const arcPoints = [];
-        for (let i = 0; i <= 32; i++) {
-            const angle = THREE.MathUtils.degToRad(-45 + (90 * i / 32));
-            arcPoints.push(new THREE.Vector3(-0.8, TILT_RADIUS * Math.sin(angle) + CENTER.y, TILT_RADIUS * Math.cos(angle)));
-        }
-        const arcCurve = new THREE.CatmullRomCurve3(arcPoints);
-        const tiltArc = new THREE.Mesh(
-            new THREE.TubeGeometry(arcCurve, 32, 0.035, 8, false),
-            new THREE.MeshStandardMaterial({ color: 0xff69b4, emissive: 0xff69b4, emissiveIntensity: 0.4 })
-        );
-        scene.add(tiltArc);
-        
-        const tiltHandle = new THREE.Mesh(
-            new THREE.SphereGeometry(0.16, 16, 16),
-            new THREE.MeshStandardMaterial({ color: 0xff69b4, emissive: 0xff69b4, emissiveIntensity: 0.6 })
-        );
-        tiltHandle.userData.type = 'tilt';
-        scene.add(tiltHandle);
-        
-        // ORANGE: Zoom/distance line & handle
-        const zoomLineGeo = new THREE.BufferGeometry();
-        const zoomLine = new THREE.Line(zoomLineGeo, new THREE.LineBasicMaterial({ color: 0xffa500, linewidth: 2 }));
-        scene.add(zoomLine);
-        
-        const zoomHandle = new THREE.Mesh(
-            new THREE.SphereGeometry(0.16, 16, 16),
-            new THREE.MeshStandardMaterial({ color: 0xffa500, emissive: 0xffa500, emissiveIntensity: 0.6 })
-        );
-        zoomHandle.userData.type = 'zoom';
-        scene.add(zoomHandle);
-        
-        function buildPromptText(rot, tilt, zoom) {
-            const parts = [];
-            
-            if (rot !== 0) {
-                const dir = rot > 0 ? 'left' : 'right';
-                parts.push(`Rotate ${Math.abs(rot)}° ${dir}`);
-            }
-            
-            if (zoom > 5) {
-                parts.push('Close-up');
-            } else if (zoom >= 1) {
-                parts.push('Move forward');
-            }
-            
-            if (tilt <= -1) {
-                parts.push("Bird's-eye view");
-            } else if (tilt >= 1) {
-                parts.push("Worm's-eye view");
-            }
-            
-            return parts.length > 0 ? parts.join(' • ') : 'No camera movement';
-        }
-        
-        function updatePositions() {
-            // Map rotation angle to camera position (inverted for visual consistency)
-            const rotRad = THREE.MathUtils.degToRad(-rotationAngle);
-            
-            // Map zoom to distance (higher zoom = closer)
-            const zoomFactor = 1 - (zoomLevel / 15);
-            const distance = BASE_DISTANCE * zoomFactor;
-            
-            // Map vertical tilt (-1 to 1) to elevation angle
-            const elevationAngle = verticalTilt * 30; // -30 to 30 degrees
-            const elRad = THREE.MathUtils.degToRad(elevationAngle);
-            
-            const camX = distance * Math.sin(rotRad) * Math.cos(elRad);
-            const camY = distance * Math.sin(elRad) + CENTER.y;
-            const camZ = distance * Math.cos(rotRad) * Math.cos(elRad);
-            
-            cameraGroup.position.set(camX, camY, camZ);
-            cameraGroup.lookAt(CENTER);
-            
-            // Update rotation handle position
-            const handleRotRad = THREE.MathUtils.degToRad(-rotationAngle);
-            rotationHandle.position.set(
-                ROTATION_RADIUS * Math.sin(handleRotRad),
-                0.05,
-                ROTATION_RADIUS * Math.cos(handleRotRad)
-            );
-            
-            // Update tilt handle position
-            const tiltAngle = verticalTilt * 30;
-            const tiltRad = THREE.MathUtils.degToRad(tiltAngle);
-            tiltHandle.position.set(
-                -0.8,
-                TILT_RADIUS * Math.sin(tiltRad) + CENTER.y,
-                TILT_RADIUS * Math.cos(tiltRad)
-            );
-            
-            // Update zoom handle position (along camera-to-center line)
-            const zoomDist = distance - 0.4;
-            zoomHandle.position.set(
-                zoomDist * Math.sin(rotRad) * Math.cos(elRad),
-                zoomDist * Math.sin(elRad) + CENTER.y,
-                zoomDist * Math.cos(rotRad) * Math.cos(elRad)
-            );
-            zoomLineGeo.setFromPoints([cameraGroup.position.clone(), CENTER.clone()]);
-            
-            // Update prompt overlay
-            const rotSnap = snapToNearest(rotationAngle, rotationSteps);
-            const tiltSnap = snapToNearest(verticalTilt, tiltSteps);
-            const zoomSnap = snapToNearest(zoomLevel, zoomSteps);
-            promptOverlay.textContent = buildPromptText(rotSnap, tiltSnap, zoomSnap);
-        }
-        
-        function updatePropsAndTrigger() {
-            const rotSnap = snapToNearest(rotationAngle, rotationSteps);
-            const tiltSnap = snapToNearest(verticalTilt, tiltSteps);
-            const zoomSnap = snapToNearest(zoomLevel, zoomSteps);
-            
-            props.value = { rotate_deg: rotSnap, vertical_tilt: tiltSnap, move_forward: zoomSnap };
-            trigger('change', props.value);
-        }
-        
-        // Raycasting for interaction
-        const raycaster = new THREE.Raycaster();
-        const mouse = new THREE.Vector2();
-        let isDragging = false;
-        let dragTarget = null;
-        let dragStartMouse = new THREE.Vector2();
-        let dragStartZoom = 0;
-        const intersection = new THREE.Vector3();
-        
-        const canvas = renderer.domElement;
-        
-        canvas.addEventListener('mousedown', (e) => {
-            const rect = canvas.getBoundingClientRect();
-            mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-            mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
-            
-            raycaster.setFromCamera(mouse, camera);
-            const intersects = raycaster.intersectObjects([rotationHandle, tiltHandle, zoomHandle]);
-            
-            if (intersects.length > 0) {
-                isDragging = true;
-                dragTarget = intersects[0].object;
-                dragTarget.material.emissiveIntensity = 1.0;
-                dragTarget.scale.setScalar(1.3);
-                dragStartMouse.copy(mouse);
-                dragStartZoom = zoomLevel;
-                canvas.style.cursor = 'grabbing';
-            }
-        });
-        
-        canvas.addEventListener('mousemove', (e) => {
-            const rect = canvas.getBoundingClientRect();
-            mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-            mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
-            
-            if (isDragging && dragTarget) {
-                raycaster.setFromCamera(mouse, camera);
-                
-                if (dragTarget.userData.type === 'rotation') {
-                    const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -0.05);
-                    if (raycaster.ray.intersectPlane(plane, intersection)) {
-                        let angle = THREE.MathUtils.radToDeg(Math.atan2(intersection.x, intersection.z));
-                        // Clamp to -90 to 90 range
-                        rotationAngle = THREE.MathUtils.clamp(-angle, -90, 90);
-                    }
-                } else if (dragTarget.userData.type === 'tilt') {
-                    const plane = new THREE.Plane(new THREE.Vector3(1, 0, 0), 0.8);
-                    if (raycaster.ray.intersectPlane(plane, intersection)) {
-                        const relY = intersection.y - CENTER.y;
-                        const relZ = intersection.z;
-                        const angle = THREE.MathUtils.radToDeg(Math.atan2(relY, relZ));
-                        // Map -30 to 30 degrees to -1 to 1
-                        verticalTilt = THREE.MathUtils.clamp(angle / 30, -1, 1);
-                    }
-                } else if (dragTarget.userData.type === 'zoom') {
-                    const deltaY = mouse.y - dragStartMouse.y;
-                    // Map drag to 0-10 range
-                    zoomLevel = THREE.MathUtils.clamp(dragStartZoom - deltaY * 12, 0, 10);
-                }
-                updatePositions();
-            } else {
-                raycaster.setFromCamera(mouse, camera);
-                const intersects = raycaster.intersectObjects([rotationHandle, tiltHandle, zoomHandle]);
-                [rotationHandle, tiltHandle, zoomHandle].forEach(h => {
-                    h.material.emissiveIntensity = 0.6;
-                    h.scale.setScalar(1);
-                });
-                if (intersects.length > 0) {
-                    intersects[0].object.material.emissiveIntensity = 0.9;
-                    intersects[0].object.scale.setScalar(1.15);
-                    canvas.style.cursor = 'grab';
-                } else {
-                    canvas.style.cursor = 'default';
-                }
-            }
-        });
-        
-        const onMouseUp = () => {
-            if (dragTarget) {
-                dragTarget.material.emissiveIntensity = 0.6;
-                dragTarget.scale.setScalar(1);
-                
-                // Snap and animate
-                const targetRot = snapToNearest(rotationAngle, rotationSteps);
-                const targetTilt = snapToNearest(verticalTilt, tiltSteps);
-                const targetZoom = snapToNearest(zoomLevel, zoomSteps);
-                
-                const startRot = rotationAngle, startTilt = verticalTilt, startZoom = zoomLevel;
-                const startTime = Date.now();
-                
-                function animateSnap() {
-                    const t = Math.min((Date.now() - startTime) / 200, 1);
-                    const ease = 1 - Math.pow(1 - t, 3);
-                    
-                    rotationAngle = startRot + (targetRot - startRot) * ease;
-                    verticalTilt = startTilt + (targetTilt - startTilt) * ease;
-                    zoomLevel = startZoom + (targetZoom - startZoom) * ease;
-                    
-                    updatePositions();
-                    if (t < 1) requestAnimationFrame(animateSnap);
-                    else updatePropsAndTrigger();
-                }
-                animateSnap();
-            }
-            isDragging = false;
-            dragTarget = null;
-            canvas.style.cursor = 'default';
-        };
-        
-        canvas.addEventListener('mouseup', onMouseUp);
-        canvas.addEventListener('mouseleave', onMouseUp);
-        
-        // Touch support
-        canvas.addEventListener('touchstart', (e) => {
-            e.preventDefault();
-            const touch = e.touches[0];
-            const rect = canvas.getBoundingClientRect();
-            mouse.x = ((touch.clientX - rect.left) / rect.width) * 2 - 1;
-            mouse.y = -((touch.clientY - rect.top) / rect.height) * 2 + 1;
-            
-            raycaster.setFromCamera(mouse, camera);
-            const intersects = raycaster.intersectObjects([rotationHandle, tiltHandle, zoomHandle]);
-            
-            if (intersects.length > 0) {
-                isDragging = true;
-                dragTarget = intersects[0].object;
-                dragTarget.material.emissiveIntensity = 1.0;
-                dragTarget.scale.setScalar(1.3);
-                dragStartMouse.copy(mouse);
-                dragStartZoom = zoomLevel;
-            }
-        }, { passive: false });
-        
-        canvas.addEventListener('touchmove', (e) => {
-            e.preventDefault();
-            const touch = e.touches[0];
-            const rect = canvas.getBoundingClientRect();
-            mouse.x = ((touch.clientX - rect.left) / rect.width) * 2 - 1;
-            mouse.y = -((touch.clientY - rect.top) / rect.height) * 2 + 1;
-            
-            if (isDragging && dragTarget) {
-                raycaster.setFromCamera(mouse, camera);
-                
-                if (dragTarget.userData.type === 'rotation') {
-                    const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -0.05);
-                    if (raycaster.ray.intersectPlane(plane, intersection)) {
-                        let angle = THREE.MathUtils.radToDeg(Math.atan2(intersection.x, intersection.z));
-                        rotationAngle = THREE.MathUtils.clamp(-angle, -90, 90);
-                    }
-                } else if (dragTarget.userData.type === 'tilt') {
-                    const plane = new THREE.Plane(new THREE.Vector3(1, 0, 0), 0.8);
-                    if (raycaster.ray.intersectPlane(plane, intersection)) {
-                        const relY = intersection.y - CENTER.y;
-                        const relZ = intersection.z;
-                        const angle = THREE.MathUtils.radToDeg(Math.atan2(relY, relZ));
-                        verticalTilt = THREE.MathUtils.clamp(angle / 30, -1, 1);
-                    }
-                } else if (dragTarget.userData.type === 'zoom') {
-                    const deltaY = mouse.y - dragStartMouse.y;
-                    zoomLevel = THREE.MathUtils.clamp(dragStartZoom - deltaY * 12, 0, 10);
-                }
-                updatePositions();
-            }
-        }, { passive: false });
-        
-        canvas.addEventListener('touchend', (e) => {
-            e.preventDefault();
-            onMouseUp();
-        }, { passive: false });
-        
-        canvas.addEventListener('touchcancel', (e) => {
-            e.preventDefault();
-            onMouseUp();
-        }, { passive: false });
-        
-        // Initial update
-        updatePositions();
-        
-        // Render loop
-        function render() {
-            requestAnimationFrame(render);
-            renderer.render(scene, camera);
-        }
-        render();
-        
-        // Handle resize
-        new ResizeObserver(() => {
-            camera.aspect = wrapper.clientWidth / wrapper.clientHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(wrapper.clientWidth, wrapper.clientHeight);
-        }).observe(wrapper);
-        
-        // Store update functions
-        wrapper._updateFromProps = (newVal) => {
-            if (newVal && typeof newVal === 'object') {
-                rotationAngle = newVal.rotate_deg ?? rotationAngle;
-                verticalTilt = newVal.vertical_tilt ?? verticalTilt;
-                zoomLevel = newVal.move_forward ?? zoomLevel;
-                updatePositions();
-            }
-        };
-        
-        wrapper._updateTexture = updateTextureFromUrl;
-        
-        // Watch for prop changes
-        let lastImageUrl = props.imageUrl;
-        let lastValue = JSON.stringify(props.value);
-        setInterval(() => {
-            if (props.imageUrl !== lastImageUrl) {
-                lastImageUrl = props.imageUrl;
-                updateTextureFromUrl(props.imageUrl);
-            }
-            const currentValue = JSON.stringify(props.value);
-            if (currentValue !== lastValue) {
-                lastValue = currentValue;
-                if (props.value && typeof props.value === 'object') {
-                    rotationAngle = props.value.rotate_deg ?? rotationAngle;
-                    verticalTilt = props.value.vertical_tilt ?? verticalTilt;
-                    zoomLevel = props.value.move_forward ?? zoomLevel;
-                    updatePositions();
-                }
-            }
-        }, 100);
-    };
-    
-    initScene();
-}
-"""
-
-
 with gr.Blocks() as demo:
     gr.Markdown("""
-    # 🎬 Qwen Image Edit 2509 — 3D Camera Control
+    ## 🎬 Qwen Image Edit — Camera Angle Control
     
-    Control camera angles using the **3D viewport** or **sliders**.  
+    Qwen Image Edit 2509 for Camera Control ✨ 
     Using [dx8152's Qwen-Edit-2509-Multiple-angles LoRA](https://huggingface.co/dx8152/Qwen-Edit-2509-Multiple-angles) and [Phr00t/Qwen-Image-Edit-Rapid-AIO](https://huggingface.co/Phr00t/Qwen-Image-Edit-Rapid-AIO/tree/main) for 4-step inference 💨
     """)
-    
+
     with gr.Row():
-        # Left column: Input and controls
+        # Left column: Input and 3D control
         with gr.Column(scale=1):
             image = gr.Image(label="Input Image", type="pil", height=280)
             prev_output = gr.Image(value=None, visible=False)
             is_reset = gr.Checkbox(value=False, visible=False)
             
             gr.Markdown("### 🎮 3D Camera Control")
-            gr.Markdown("*Drag the colored handles: 🟢 Rotation, 🩷 Vertical Tilt, 🟠 Zoom*")
+            gr.Markdown("*Drag the handles: 🟢 Rotation, 🩷 Tilt, 🟠 Distance*")
             
-            camera_3d = gr.HTML(
-                value={"rotate_deg": 0, "vertical_tilt": 0, "move_forward": 0},
-                elem_id="camera-3d-control",
-                html_template=camera_3d_html,
-                js_on_load=camera_3d_js
+            camera_3d = CameraControl3D(
+                value={"rotate_deg": 0, "move_forward": 0, "vertical_tilt": 0, "wideangle": False},
+                elem_id="camera-3d-control"
             )
             
             with gr.Row():
-                reset_btn = gr.Button("🔄 Reset", variant="secondary")
+                reset_btn = gr.Button("🔄 Reset", size="sm")
                 run_btn = gr.Button("🚀 Generate", variant="primary", size="lg")
-            
-            gr.Markdown("### 🎚️ Slider Controls")
-            
-            rotate_deg = gr.Slider(
-                label="Rotate Left-Right (degrees °)",
-                minimum=-90,
-                maximum=90,
-                step=45,
-                value=0,
-                info="Positive = left, Negative = right"
-            )
-            
-            move_forward = gr.Slider(
-                label="Move Forward → Close-Up",
-                minimum=0,
-                maximum=10,
-                step=5,
-                value=0,
-                info="0 = normal, 5 = forward, 10 = close-up"
-            )
-            
-            vertical_tilt = gr.Slider(
-                label="Vertical Angle (Bird ↔ Worm)",
-                minimum=-1,
-                maximum=1,
-                step=1,
-                value=0,
-                info="-1 = bird's eye, 0 = eye level, 1 = worm's eye"
-            )
-            
-            wideangle = gr.Checkbox(label="🔲 Wide-Angle Lens", value=False)
-            
-            prompt_preview = gr.Textbox(
-                label="Generated Prompt",
-                value="no camera movement",
-                interactive=False
-            )
         
-        # Right column: Output
+        # Right column: Sliders, output, and settings
         with gr.Column(scale=1):
-            result = gr.Image(label="Output Image", height=500, interactive=False)
+            result = gr.Image(label="Output Image", interactive=False, height=350)
+            prompt_preview = gr.Textbox(label="Generated Prompt", interactive=False)
             
             create_video_button = gr.Button(
                 "🎥 Create Video Between Images",
                 variant="secondary",
                 visible=False
             )
-            
             with gr.Group(visible=False) as video_group:
                 video_output = gr.Video(
                     label="Generated Video",
+                    buttons=["download"],
                     autoplay=True
                 )
+            
+            gr.Markdown("### 🎚️ Slider Controls")
+            
+            with gr.Row():
+                rotate_deg = gr.Slider(
+                    label="Rotate Right ↔ Left (°)",
+                    minimum=-90,
+                    maximum=90,
+                    step=45,
+                    value=0
+                )
+            
+            with gr.Row():
+                move_forward = gr.Slider(
+                    label="Move Forward → Close-Up",
+                    minimum=0,
+                    maximum=10,
+                    step=5,
+                    value=0
+                )
+            
+            with gr.Row():
+                vertical_tilt = gr.Slider(
+                    label="Vertical: Bird's-eye ↔ Worm's-eye",
+                    minimum=-1,
+                    maximum=1,
+                    step=1,
+                    value=0
+                )
+            
+            wideangle = gr.Checkbox(label="🔭 Wide-Angle Lens", value=False)
             
             with gr.Accordion("⚙️ Advanced Settings", open=False):
                 seed = gr.Slider(label="Seed", minimum=0, maximum=MAX_SEED, step=1, value=0)
                 randomize_seed = gr.Checkbox(label="Randomize Seed", value=True)
-                true_guidance_scale = gr.Slider(label="True Guidance Scale", minimum=1.0, maximum=10.0, step=0.1, value=1.0)
-                num_inference_steps = gr.Slider(label="Inference Steps", minimum=1, maximum=40, step=1, value=4)
+                true_guidance_scale = gr.Slider(
+                    label="True Guidance Scale",
+                    minimum=1.0,
+                    maximum=10.0,
+                    step=0.1,
+                    value=1.0
+                )
+                num_inference_steps = gr.Slider(
+                    label="Inference Steps",
+                    minimum=1,
+                    maximum=40,
+                    step=1,
+                    value=4
+                )
                 height = gr.Slider(label="Height", minimum=256, maximum=2048, step=8, value=1024)
                 width = gr.Slider(label="Width", minimum=256, maximum=2048, step=8, value=1024)
-    
+
     # --- Event Handlers ---
     
     def update_prompt_from_sliders(rotate, forward, tilt, wide):
@@ -956,15 +896,16 @@ with gr.Blocks() as demo:
         """Sync 3D control changes to sliders."""
         if camera_value and isinstance(camera_value, dict):
             rot = camera_value.get('rotate_deg', 0)
+            fwd = camera_value.get('move_forward', 0)
             tilt = camera_value.get('vertical_tilt', 0)
-            zoom = camera_value.get('move_forward', 0)
-            prompt = build_camera_prompt(rot, zoom, tilt, False)
-            return rot, zoom, tilt, prompt
-        return gr.update(), gr.update(), gr.update(), gr.update()
+            wide = camera_value.get('wideangle', False)
+            prompt = build_camera_prompt(rot, fwd, tilt, wide)
+            return rot, fwd, tilt, wide, prompt
+        return gr.update(), gr.update(), gr.update(), gr.update(), gr.update()
     
-    def sync_sliders_to_3d(rotate, forward, tilt):
+    def sync_sliders_to_3d(rotate, forward, tilt, wide):
         """Sync slider changes to 3D control."""
-        return {"rotate_deg": rotate, "vertical_tilt": tilt, "move_forward": forward}
+        return {"rotate_deg": rotate, "move_forward": forward, "vertical_tilt": tilt, "wideangle": wide}
     
     def update_3d_image(image):
         """Update the 3D component with the uploaded image."""
@@ -996,16 +937,22 @@ with gr.Blocks() as demo:
     camera_3d.change(
         fn=sync_3d_to_sliders,
         inputs=[camera_3d],
-        outputs=[rotate_deg, move_forward, vertical_tilt, prompt_preview]
+        outputs=[rotate_deg, move_forward, vertical_tilt, wideangle, prompt_preview]
     )
     
     # Sliders -> 3D control
     for slider in [rotate_deg, move_forward, vertical_tilt]:
         slider.release(
             fn=sync_sliders_to_3d,
-            inputs=[rotate_deg, move_forward, vertical_tilt],
+            inputs=[rotate_deg, move_forward, vertical_tilt, wideangle],
             outputs=[camera_3d]
         )
+    
+    wideangle.input(
+        fn=sync_sliders_to_3d,
+        inputs=[rotate_deg, move_forward, vertical_tilt, wideangle],
+        outputs=[camera_3d]
+    )
     
     # Reset behavior
     reset_btn.click(
@@ -1020,12 +967,12 @@ with gr.Blocks() as demo:
         queue=False
     ).then(
         fn=sync_sliders_to_3d,
-        inputs=[rotate_deg, move_forward, vertical_tilt],
+        inputs=[rotate_deg, move_forward, vertical_tilt, wideangle],
         outputs=[camera_3d]
     )
     
-    # Manual generation with video button visibility
-    def infer_and_show_video_button(*args):
+    # Manual generation with video button visibility control
+    def infer_and_show_video_button(*args: Any):
         result_img, result_seed, result_prompt = infer_camera_edit(*args)
         show_button = args[0] is not None and result_img is not None
         return result_img, result_seed, result_prompt, gr.update(visible=show_button)
@@ -1083,8 +1030,8 @@ with gr.Blocks() as demo:
     )
     
     # Live updates
-    def maybe_infer(is_reset_flag, *args):
-        if is_reset_flag:
+    def maybe_infer(is_reset: bool, progress: gr.Progress = gr.Progress(track_tqdm=True), *args: Any):
+        if is_reset:
             return gr.update(), gr.update(), gr.update(), gr.update()
         else:
             result_img, result_seed, result_prompt = infer_camera_edit(*args)
@@ -1138,10 +1085,5 @@ with gr.Blocks() as demo:
     gr.api(create_video_between_images, api_name="create_video_between_images")
 
 if __name__ == "__main__":
-    demo.launch(
-        head=three_js_head,
-        mcp_server=True,
-        theme=gr.themes.Citrus(),
-        css=css,
-        footer_links=["api", "gradio", "settings"]
-    )
+    head = '<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>'
+    demo.launch(mcp_server=True, head=head, css=css, theme=gr.themes.Citrus(), footer_links=["api", "gradio", "settings"])
