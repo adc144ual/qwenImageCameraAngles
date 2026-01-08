@@ -756,6 +756,7 @@ css = '''
 .dark .progress-text { color: white !important; }
 #camera-3d-control { min-height: 400px; }
 #examples { max-width: 1100px; margin: 0 auto; }
+.fillable{max-width: 1200px !important}
 '''
 
 
