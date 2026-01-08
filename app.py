@@ -756,7 +756,7 @@ css = '''
 .dark .progress-text { color: white !important; }
 #camera-3d-control { min-height: 400px; }
 #examples { max-width: 1100px; margin: 0 auto; }
-.fillable{max-width: 1200px !important}
+.fillable{max-width: 1100px !important}
 '''
 
 
@@ -822,6 +822,46 @@ with gr.Blocks() as demo:
         # Right column: Sliders, output, and settings
         with gr.Column(scale=1):
             result = gr.Image(label="Output Image", interactive=False, height=350)
+        
+            with gr.Group(visible=False) as video_group:
+                video_output = gr.Video(
+                    label="Generated Video",
+                    buttons=["download"],
+                    autoplay=True
+                )
+                
+            with gr.Group():
+                gr.Markdown("### 🎚️ Slider Controls")
+                
+                with gr.Row():
+                    rotate_deg = gr.Slider(
+                        label="Rotate Right ↔ Left (°)",
+                        minimum=-90,
+                        maximum=90,
+                        step=45,
+                        value=0
+                    )
+                
+                with gr.Row():
+                    move_forward = gr.Slider(
+                        label="Move Forward → Close-Up",
+                        minimum=0,
+                        maximum=10,
+                        step=5,
+                        value=0
+                    )
+                
+                with gr.Row():
+                    vertical_tilt = gr.Slider(
+                        label="Vertical: Bird's-eye ↔ Worm's-eye",
+                        minimum=-1,
+                        maximum=1,
+                        step=1,
+                        value=0
+                    )
+                
+                wideangle = gr.Checkbox(label="🔭 Wide-Angle Lens", value=False)
+
             prompt_preview = gr.Textbox(label="Generated Prompt", interactive=False)
             
             create_video_button = gr.Button(
@@ -829,43 +869,6 @@ with gr.Blocks() as demo:
                 variant="secondary",
                 visible=False
             )
-            with gr.Group(visible=False) as video_group:
-                video_output = gr.Video(
-                    label="Generated Video",
-                    buttons=["download"],
-                    autoplay=True
-                )
-            
-            gr.Markdown("### 🎚️ Slider Controls")
-            
-            with gr.Row():
-                rotate_deg = gr.Slider(
-                    label="Rotate Right ↔ Left (°)",
-                    minimum=-90,
-                    maximum=90,
-                    step=45,
-                    value=0
-                )
-            
-            with gr.Row():
-                move_forward = gr.Slider(
-                    label="Move Forward → Close-Up",
-                    minimum=0,
-                    maximum=10,
-                    step=5,
-                    value=0
-                )
-            
-            with gr.Row():
-                vertical_tilt = gr.Slider(
-                    label="Vertical: Bird's-eye ↔ Worm's-eye",
-                    minimum=-1,
-                    maximum=1,
-                    step=1,
-                    value=0
-                )
-            
-            wideangle = gr.Checkbox(label="🔭 Wide-Angle Lens", value=False)
             
             with gr.Accordion("⚙️ Advanced Settings", open=False):
                 seed = gr.Slider(label="Seed", minimum=0, maximum=MAX_SEED, step=1, value=0)
