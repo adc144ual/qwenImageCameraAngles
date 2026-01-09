@@ -191,482 +191,470 @@ def create_video_between_images(
 
 
 # --- 3D Camera Control Component for 2509 ---
-class CameraControl3D(gr.HTML):
-    """
-    A 3D camera control component using Three.js adapted for 2509's control scheme.
-    Controls: rotate_deg (-90 to 90), move_forward (0-10), vertical_tilt (-1 to 1), wideangle (bool)
-    """
-    def __init__(self, value=None, imageUrl=None, **kwargs):
-        if value is None:
-            value = {"rotate_deg": 0, "move_forward": 0, "vertical_tilt": 0, "wideangle": False}
+# Using gr.HTML directly with templates (Gradio 6 style)
+
+CAMERA_3D_HTML_TEMPLATE = """
+<div id="camera-control-wrapper" style="width: 100%; height: 400px; position: relative; background: #1a1a1a; border-radius: 12px; overflow: hidden;">
+    <div id="prompt-overlay" style="position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); padding: 8px 16px; border-radius: 8px; font-family: monospace; font-size: 11px; color: #00ff88; white-space: nowrap; z-index: 10; max-width: 90%; overflow: hidden; text-overflow: ellipsis;"></div>
+    <div id="control-legend" style="position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.7); padding: 8px 12px; border-radius: 8px; font-family: system-ui; font-size: 11px; color: #fff; z-index: 10;">
+        <div style="margin-bottom: 4px;"><span style="color: #00ff88;">●</span> Rotation (↔)</div>
+        <div style="margin-bottom: 4px;"><span style="color: #ff69b4;">●</span> Vertical Tilt (↕)</div>
+        <div><span style="color: #ffa500;">●</span> Distance/Zoom</div>
+    </div>
+</div>
+"""
+
+CAMERA_3D_JS = """
+(() => {
+    const wrapper = element.querySelector('#camera-control-wrapper');
+    const promptOverlay = element.querySelector('#prompt-overlay');
+    
+    const initScene = () => {
+        if (typeof THREE === 'undefined') {
+            setTimeout(initScene, 100);
+            return;
+        }
         
-        html_template = """
-        <div id="camera-control-wrapper" style="width: 100%; height: 400px; position: relative; background: #1a1a1a; border-radius: 12px; overflow: hidden;">
-            <div id="prompt-overlay" style="position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); padding: 8px 16px; border-radius: 8px; font-family: monospace; font-size: 11px; color: #00ff88; white-space: nowrap; z-index: 10; max-width: 90%; overflow: hidden; text-overflow: ellipsis;"></div>
-            <div id="control-legend" style="position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.7); padding: 8px 12px; border-radius: 8px; font-family: system-ui; font-size: 11px; color: #fff; z-index: 10;">
-                <div style="margin-bottom: 4px;"><span style="color: #00ff88;">●</span> Rotation (↔)</div>
-                <div style="margin-bottom: 4px;"><span style="color: #ff69b4;">●</span> Vertical Tilt (↕)</div>
-                <div><span style="color: #ffa500;">●</span> Distance/Zoom</div>
-            </div>
-        </div>
-        """
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x1a1a1a);
         
-        js_on_load = """
-        (() => {
-            const wrapper = element.querySelector('#camera-control-wrapper');
-            const promptOverlay = element.querySelector('#prompt-overlay');
-            
-            const initScene = () => {
-                if (typeof THREE === 'undefined') {
-                    setTimeout(initScene, 100);
-                    return;
-                }
-                
-                const scene = new THREE.Scene();
-                scene.background = new THREE.Color(0x1a1a1a);
-                
-                const camera = new THREE.PerspectiveCamera(50, wrapper.clientWidth / wrapper.clientHeight, 0.1, 1000);
-                camera.position.set(4, 3, 4);
-                camera.lookAt(0, 0.75, 0);
-                
-                const renderer = new THREE.WebGLRenderer({ antialias: true });
-                renderer.setSize(wrapper.clientWidth, wrapper.clientHeight);
-                renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-                wrapper.insertBefore(renderer.domElement, wrapper.firstChild);
-                
-                scene.add(new THREE.AmbientLight(0xffffff, 0.6));
-                const dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
-                dirLight.position.set(5, 10, 5);
-                scene.add(dirLight);
-                
-                scene.add(new THREE.GridHelper(6, 12, 0x333333, 0x222222));
-                
-                const CENTER = new THREE.Vector3(0, 0.75, 0);
-                const BASE_DISTANCE = 2.0;
-                const ROTATION_RADIUS = 2.2;
-                const TILT_RADIUS = 1.6;
-                
-                let rotateDeg = props.value?.rotate_deg || 0;
-                let moveForward = props.value?.move_forward || 0;
-                let verticalTilt = props.value?.vertical_tilt || 0;
-                let wideangle = props.value?.wideangle || false;
-                
-                const rotateSteps = [-90, -45, 0, 45, 90];
-                const forwardSteps = [0, 5, 10];
-                const tiltSteps = [-1, 0, 1];
-                
-                function snapToNearest(value, steps) {
-                    return steps.reduce((prev, curr) => Math.abs(curr - value) < Math.abs(prev - value) ? curr : prev);
-                }
-                
-                function createPlaceholderTexture() {
-                    const canvas = document.createElement('canvas');
-                    canvas.width = 256;
-                    canvas.height = 256;
-                    const ctx = canvas.getContext('2d');
-                    ctx.fillStyle = '#3a3a4a';
-                    ctx.fillRect(0, 0, 256, 256);
-                    ctx.fillStyle = '#ffcc99';
-                    ctx.beginPath();
-                    ctx.arc(128, 128, 80, 0, Math.PI * 2);
-                    ctx.fill();
-                    ctx.fillStyle = '#333';
-                    ctx.beginPath();
-                    ctx.arc(100, 110, 10, 0, Math.PI * 2);
-                    ctx.arc(156, 110, 10, 0, Math.PI * 2);
-                    ctx.fill();
-                    ctx.strokeStyle = '#333';
-                    ctx.lineWidth = 3;
-                    ctx.beginPath();
-                    ctx.arc(128, 130, 35, 0.2, Math.PI - 0.2);
-                    ctx.stroke();
-                    return new THREE.CanvasTexture(canvas);
-                }
-                
-                let currentTexture = createPlaceholderTexture();
-                const planeMaterial = new THREE.MeshBasicMaterial({ map: currentTexture, side: THREE.DoubleSide });
-                let targetPlane = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 1.2), planeMaterial);
+        const camera = new THREE.PerspectiveCamera(50, wrapper.clientWidth / wrapper.clientHeight, 0.1, 1000);
+        camera.position.set(4, 3, 4);
+        camera.lookAt(0, 0.75, 0);
+        
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(wrapper.clientWidth, wrapper.clientHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        wrapper.insertBefore(renderer.domElement, wrapper.firstChild);
+        
+        scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
+        dirLight.position.set(5, 10, 5);
+        scene.add(dirLight);
+        
+        scene.add(new THREE.GridHelper(6, 12, 0x333333, 0x222222));
+        
+        const CENTER = new THREE.Vector3(0, 0.75, 0);
+        const BASE_DISTANCE = 2.0;
+        const ROTATION_RADIUS = 2.2;
+        const TILT_RADIUS = 1.6;
+        
+        let rotateDeg = props.value?.rotate_deg || 0;
+        let moveForward = props.value?.move_forward || 0;
+        let verticalTilt = props.value?.vertical_tilt || 0;
+        let wideangle = props.value?.wideangle || false;
+        
+        const rotateSteps = [-90, -45, 0, 45, 90];
+        const forwardSteps = [0, 5, 10];
+        const tiltSteps = [-1, 0, 1];
+        
+        function snapToNearest(value, steps) {
+            return steps.reduce((prev, curr) => Math.abs(curr - value) < Math.abs(prev - value) ? curr : prev);
+        }
+        
+        function createPlaceholderTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 256;
+            canvas.height = 256;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#3a3a4a';
+            ctx.fillRect(0, 0, 256, 256);
+            ctx.fillStyle = '#ffcc99';
+            ctx.beginPath();
+            ctx.arc(128, 128, 80, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#333';
+            ctx.beginPath();
+            ctx.arc(100, 110, 10, 0, Math.PI * 2);
+            ctx.arc(156, 110, 10, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = '#333';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.arc(128, 130, 35, 0.2, Math.PI - 0.2);
+            ctx.stroke();
+            return new THREE.CanvasTexture(canvas);
+        }
+        
+        let currentTexture = createPlaceholderTexture();
+        const planeMaterial = new THREE.MeshBasicMaterial({ map: currentTexture, side: THREE.DoubleSide });
+        let targetPlane = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 1.2), planeMaterial);
+        targetPlane.position.copy(CENTER);
+        scene.add(targetPlane);
+        
+        function updateTextureFromUrl(url) {
+            if (!url) {
+                planeMaterial.map = createPlaceholderTexture();
+                planeMaterial.needsUpdate = true;
+                scene.remove(targetPlane);
+                targetPlane = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 1.2), planeMaterial);
                 targetPlane.position.copy(CENTER);
                 scene.add(targetPlane);
-                
-                function updateTextureFromUrl(url) {
-                    if (!url) {
-                        planeMaterial.map = createPlaceholderTexture();
-                        planeMaterial.needsUpdate = true;
-                        scene.remove(targetPlane);
-                        targetPlane = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 1.2), planeMaterial);
-                        targetPlane.position.copy(CENTER);
-                        scene.add(targetPlane);
-                        return;
-                    }
-                    
-                    const loader = new THREE.TextureLoader();
-                    loader.crossOrigin = 'anonymous';
-                    loader.load(url, (texture) => {
-                        texture.minFilter = THREE.LinearFilter;
-                        texture.magFilter = THREE.LinearFilter;
-                        planeMaterial.map = texture;
-                        planeMaterial.needsUpdate = true;
-                        
-                        const img = texture.image;
-                        if (img && img.width && img.height) {
-                            const aspect = img.width / img.height;
-                            const maxSize = 1.4;
-                            let planeWidth, planeHeight;
-                            if (aspect > 1) {
-                                planeWidth = maxSize;
-                                planeHeight = maxSize / aspect;
-                            } else {
-                                planeHeight = maxSize;
-                                planeWidth = maxSize * aspect;
-                            }
-                            scene.remove(targetPlane);
-                            targetPlane = new THREE.Mesh(new THREE.PlaneGeometry(planeWidth, planeHeight), planeMaterial);
-                            targetPlane.position.copy(CENTER);
-                            scene.add(targetPlane);
-                        }
-                    });
-                }
-                
-                if (props.imageUrl) {
-                    updateTextureFromUrl(props.imageUrl);
-                }
-                
-                const cameraGroup = new THREE.Group();
-                const bodyMat = new THREE.MeshStandardMaterial({ color: 0x6699cc, metalness: 0.5, roughness: 0.3 });
-                const body = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.2, 0.35), bodyMat);
-                cameraGroup.add(body);
-                const lens = new THREE.Mesh(
-                    new THREE.CylinderGeometry(0.08, 0.1, 0.16, 16),
-                    new THREE.MeshStandardMaterial({ color: 0x6699cc, metalness: 0.5, roughness: 0.3 })
-                );
-                lens.rotation.x = Math.PI / 2;
-                lens.position.z = 0.24;
-                cameraGroup.add(lens);
-                scene.add(cameraGroup);
-                
-                const rotationArcPoints = [];
-                for (let i = 0; i <= 32; i++) {
-                    const angle = THREE.MathUtils.degToRad(-90 + (180 * i / 32));
-                    rotationArcPoints.push(new THREE.Vector3(ROTATION_RADIUS * Math.sin(angle), 0.05, ROTATION_RADIUS * Math.cos(angle)));
-                }
-                const rotationCurve = new THREE.CatmullRomCurve3(rotationArcPoints);
-                const rotationArc = new THREE.Mesh(
-                    new THREE.TubeGeometry(rotationCurve, 32, 0.035, 8, false),
-                    new THREE.MeshStandardMaterial({ color: 0x00ff88, emissive: 0x00ff88, emissiveIntensity: 0.3 })
-                );
-                scene.add(rotationArc);
-                
-                const rotationHandle = new THREE.Mesh(
-                    new THREE.SphereGeometry(0.16, 16, 16),
-                    new THREE.MeshStandardMaterial({ color: 0x00ff88, emissive: 0x00ff88, emissiveIntensity: 0.5 })
-                );
-                rotationHandle.userData.type = 'rotation';
-                scene.add(rotationHandle);
-                
-                const tiltArcPoints = [];
-                for (let i = 0; i <= 32; i++) {
-                    const angle = THREE.MathUtils.degToRad(-45 + (90 * i / 32));
-                    tiltArcPoints.push(new THREE.Vector3(-0.7, TILT_RADIUS * Math.sin(angle) + CENTER.y, TILT_RADIUS * Math.cos(angle)));
-                }
-                const tiltCurve = new THREE.CatmullRomCurve3(tiltArcPoints);
-                const tiltArc = new THREE.Mesh(
-                    new THREE.TubeGeometry(tiltCurve, 32, 0.035, 8, false),
-                    new THREE.MeshStandardMaterial({ color: 0xff69b4, emissive: 0xff69b4, emissiveIntensity: 0.3 })
-                );
-                scene.add(tiltArc);
-                
-                const tiltHandle = new THREE.Mesh(
-                    new THREE.SphereGeometry(0.16, 16, 16),
-                    new THREE.MeshStandardMaterial({ color: 0xff69b4, emissive: 0xff69b4, emissiveIntensity: 0.5 })
-                );
-                tiltHandle.userData.type = 'tilt';
-                scene.add(tiltHandle);
-                
-                const distanceLineGeo = new THREE.BufferGeometry();
-                const distanceLine = new THREE.Line(distanceLineGeo, new THREE.LineBasicMaterial({ color: 0xffa500 }));
-                scene.add(distanceLine);
-                
-                const distanceHandle = new THREE.Mesh(
-                    new THREE.SphereGeometry(0.16, 16, 16),
-                    new THREE.MeshStandardMaterial({ color: 0xffa500, emissive: 0xffa500, emissiveIntensity: 0.5 })
-                );
-                distanceHandle.userData.type = 'distance';
-                scene.add(distanceHandle);
-                
-                function buildPromptText(rot, fwd, tilt, wide) {
-                    const parts = [];
-                    if (rot !== 0) {
-                        const dir = rot > 0 ? 'left' : 'right';
-                        parts.push('Rotate ' + Math.abs(rot) + '° ' + dir);
-                    }
-                    if (fwd > 5) parts.push('Close-up');
-                    else if (fwd >= 1) parts.push('Move forward');
-                    if (tilt <= -1) parts.push("Bird's-eye");
-                    else if (tilt >= 1) parts.push("Worm's-eye");
-                    if (wide) parts.push('Wide-angle');
-                    return parts.length > 0 ? parts.join(' • ') : 'No camera movement';
-                }
-                
-                function updatePositions() {
-                    const rotRad = THREE.MathUtils.degToRad(-rotateDeg);
-                    const distance = BASE_DISTANCE - (moveForward / 10) * 1.0;
-                    const tiltAngle = verticalTilt * 35;
-                    const tiltRad = THREE.MathUtils.degToRad(tiltAngle);
-                    
-                    const camX = distance * Math.sin(rotRad) * Math.cos(tiltRad);
-                    const camY = distance * Math.sin(tiltRad) + CENTER.y;
-                    const camZ = distance * Math.cos(rotRad) * Math.cos(tiltRad);
-                    
-                    cameraGroup.position.set(camX, camY, camZ);
-                    cameraGroup.lookAt(CENTER);
-                    
-                    rotationHandle.position.set(ROTATION_RADIUS * Math.sin(rotRad), 0.05, ROTATION_RADIUS * Math.cos(rotRad));
-                    
-                    const tiltHandleAngle = THREE.MathUtils.degToRad(tiltAngle);
-                    tiltHandle.position.set(-0.7, TILT_RADIUS * Math.sin(tiltHandleAngle) + CENTER.y, TILT_RADIUS * Math.cos(tiltHandleAngle));
-                    
-                    const handleDist = distance - 0.4;
-                    distanceHandle.position.set(
-                        handleDist * Math.sin(rotRad) * Math.cos(tiltRad),
-                        handleDist * Math.sin(tiltRad) + CENTER.y,
-                        handleDist * Math.cos(rotRad) * Math.cos(tiltRad)
-                    );
-                    distanceLineGeo.setFromPoints([cameraGroup.position.clone(), CENTER.clone()]);
-                    
-                    promptOverlay.textContent = buildPromptText(rotateDeg, moveForward, verticalTilt, wideangle);
-                }
-                
-                function updatePropsAndTrigger() {
-                    const rotSnap = snapToNearest(rotateDeg, rotateSteps);
-                    const fwdSnap = snapToNearest(moveForward, forwardSteps);
-                    const tiltSnap = snapToNearest(verticalTilt, tiltSteps);
-                    
-                    props.value = { rotate_deg: rotSnap, move_forward: fwdSnap, vertical_tilt: tiltSnap, wideangle: wideangle };
-                    trigger('change', props.value);
-                }
-                
-                const raycaster = new THREE.Raycaster();
-                const mouse = new THREE.Vector2();
-                let isDragging = false;
-                let dragTarget = null;
-                let dragStartMouse = new THREE.Vector2();
-                let dragStartForward = 0;
-                const intersection = new THREE.Vector3();
-                
-                const canvas = renderer.domElement;
-                
-                canvas.addEventListener('mousedown', (e) => {
-                    const rect = canvas.getBoundingClientRect();
-                    mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-                    mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
-                    
-                    raycaster.setFromCamera(mouse, camera);
-                    const intersects = raycaster.intersectObjects([rotationHandle, tiltHandle, distanceHandle]);
-                    
-                    if (intersects.length > 0) {
-                        isDragging = true;
-                        dragTarget = intersects[0].object;
-                        dragTarget.material.emissiveIntensity = 1.0;
-                        dragTarget.scale.setScalar(1.3);
-                        dragStartMouse.copy(mouse);
-                        dragStartForward = moveForward;
-                        canvas.style.cursor = 'grabbing';
-                    }
-                });
-                
-                canvas.addEventListener('mousemove', (e) => {
-                    const rect = canvas.getBoundingClientRect();
-                    mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-                    mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
-                    
-                    if (isDragging && dragTarget) {
-                        raycaster.setFromCamera(mouse, camera);
-                        
-                        if (dragTarget.userData.type === 'rotation') {
-                            const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -0.05);
-                            if (raycaster.ray.intersectPlane(plane, intersection)) {
-                                let angle = THREE.MathUtils.radToDeg(Math.atan2(intersection.x, intersection.z));
-                                rotateDeg = THREE.MathUtils.clamp(-angle, -90, 90);
-                            }
-                        } else if (dragTarget.userData.type === 'tilt') {
-                            const plane = new THREE.Plane(new THREE.Vector3(1, 0, 0), 0.7);
-                            if (raycaster.ray.intersectPlane(plane, intersection)) {
-                                const relY = intersection.y - CENTER.y;
-                                const relZ = intersection.z;
-                                const angle = THREE.MathUtils.radToDeg(Math.atan2(relY, relZ));
-                                verticalTilt = THREE.MathUtils.clamp(angle / 35, -1, 1);
-                            }
-                        } else if (dragTarget.userData.type === 'distance') {
-                            const deltaY = mouse.y - dragStartMouse.y;
-                            moveForward = THREE.MathUtils.clamp(dragStartForward + deltaY * 12, 0, 10);
-                        }
-                        updatePositions();
-                    } else {
-                        raycaster.setFromCamera(mouse, camera);
-                        const intersects = raycaster.intersectObjects([rotationHandle, tiltHandle, distanceHandle]);
-                        [rotationHandle, tiltHandle, distanceHandle].forEach(h => {
-                            h.material.emissiveIntensity = 0.5;
-                            h.scale.setScalar(1);
-                        });
-                        if (intersects.length > 0) {
-                            intersects[0].object.material.emissiveIntensity = 0.8;
-                            intersects[0].object.scale.setScalar(1.1);
-                            canvas.style.cursor = 'grab';
-                        } else {
-                            canvas.style.cursor = 'default';
-                        }
-                    }
-                });
-                
-                const onMouseUp = () => {
-                    if (dragTarget) {
-                        dragTarget.material.emissiveIntensity = 0.5;
-                        dragTarget.scale.setScalar(1);
-                        
-                        const targetRot = snapToNearest(rotateDeg, rotateSteps);
-                        const targetFwd = snapToNearest(moveForward, forwardSteps);
-                        const targetTilt = snapToNearest(verticalTilt, tiltSteps);
-                        
-                        const startRot = rotateDeg, startFwd = moveForward, startTilt = verticalTilt;
-                        const startTime = Date.now();
-                        
-                        function animateSnap() {
-                            const t = Math.min((Date.now() - startTime) / 200, 1);
-                            const ease = 1 - Math.pow(1 - t, 3);
-                            
-                            rotateDeg = startRot + (targetRot - startRot) * ease;
-                            moveForward = startFwd + (targetFwd - startFwd) * ease;
-                            verticalTilt = startTilt + (targetTilt - startTilt) * ease;
-                            
-                            updatePositions();
-                            if (t < 1) requestAnimationFrame(animateSnap);
-                            else updatePropsAndTrigger();
-                        }
-                        animateSnap();
-                    }
-                    isDragging = false;
-                    dragTarget = null;
-                    canvas.style.cursor = 'default';
-                };
-                
-                canvas.addEventListener('mouseup', onMouseUp);
-                canvas.addEventListener('mouseleave', onMouseUp);
-
-                canvas.addEventListener('touchstart', (e) => {
-                    e.preventDefault();
-                    const touch = e.touches[0];
-                    const rect = canvas.getBoundingClientRect();
-                    mouse.x = ((touch.clientX - rect.left) / rect.width) * 2 - 1;
-                    mouse.y = -((touch.clientY - rect.top) / rect.height) * 2 + 1;
-                    
-                    raycaster.setFromCamera(mouse, camera);
-                    const intersects = raycaster.intersectObjects([rotationHandle, tiltHandle, distanceHandle]);
-                    
-                    if (intersects.length > 0) {
-                        isDragging = true;
-                        dragTarget = intersects[0].object;
-                        dragTarget.material.emissiveIntensity = 1.0;
-                        dragTarget.scale.setScalar(1.3);
-                        dragStartMouse.copy(mouse);
-                        dragStartForward = moveForward;
-                    }
-                }, { passive: false });
-                
-                canvas.addEventListener('touchmove', (e) => {
-                    e.preventDefault();
-                    const touch = e.touches[0];
-                    const rect = canvas.getBoundingClientRect();
-                    mouse.x = ((touch.clientX - rect.left) / rect.width) * 2 - 1;
-                    mouse.y = -((touch.clientY - rect.top) / rect.height) * 2 + 1;
-                    
-                    if (isDragging && dragTarget) {
-                        raycaster.setFromCamera(mouse, camera);
-                        
-                        if (dragTarget.userData.type === 'rotation') {
-                            const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -0.05);
-                            if (raycaster.ray.intersectPlane(plane, intersection)) {
-                                let angle = THREE.MathUtils.radToDeg(Math.atan2(intersection.x, intersection.z));
-                                rotateDeg = THREE.MathUtils.clamp(-angle, -90, 90);
-                            }
-                        } else if (dragTarget.userData.type === 'tilt') {
-                            const plane = new THREE.Plane(new THREE.Vector3(1, 0, 0), 0.7);
-                            if (raycaster.ray.intersectPlane(plane, intersection)) {
-                                const relY = intersection.y - CENTER.y;
-                                const relZ = intersection.z;
-                                const angle = THREE.MathUtils.radToDeg(Math.atan2(relY, relZ));
-                                verticalTilt = THREE.MathUtils.clamp(angle / 35, -1, 1);
-                            }
-                        } else if (dragTarget.userData.type === 'distance') {
-                            const deltaY = mouse.y - dragStartMouse.y;
-                            moveForward = THREE.MathUtils.clamp(dragStartForward + deltaY * 12, 0, 10);
-                        }
-                        updatePositions();
-                    }
-                }, { passive: false });
-                
-                canvas.addEventListener('touchend', (e) => { e.preventDefault(); onMouseUp(); }, { passive: false });
-                canvas.addEventListener('touchcancel', (e) => { e.preventDefault(); onMouseUp(); }, { passive: false });
-                
-                updatePositions();
-                
-                function render() {
-                    requestAnimationFrame(render);
-                    renderer.render(scene, camera);
-                }
-                render();
-                
-                new ResizeObserver(() => {
-                    camera.aspect = wrapper.clientWidth / wrapper.clientHeight;
-                    camera.updateProjectionMatrix();
-                    renderer.setSize(wrapper.clientWidth, wrapper.clientHeight);
-                }).observe(wrapper);
-                
-                wrapper._updateTexture = updateTextureFromUrl;
-                
-                let lastImageUrl = props.imageUrl;
-                let lastValue = JSON.stringify(props.value);
-                setInterval(() => {
-                    if (props.imageUrl !== lastImageUrl) {
-                        lastImageUrl = props.imageUrl;
-                        updateTextureFromUrl(props.imageUrl);
-                    }
-                    const currentValue = JSON.stringify(props.value);
-                    if (currentValue !== lastValue) {
-                        lastValue = currentValue;
-                        if (props.value && typeof props.value === 'object') {
-                            rotateDeg = props.value.rotate_deg ?? rotateDeg;
-                            moveForward = props.value.move_forward ?? moveForward;
-                            verticalTilt = props.value.vertical_tilt ?? verticalTilt;
-                            wideangle = props.value.wideangle ?? wideangle;
-                            updatePositions();
-                        }
-                    }
-                }, 100);
-            };
-            
-            initScene();
-        })();
-        """
-        
-        super().__init__(
-            value=value,
-            html_template=html_template,
-            js_on_load=js_on_load,
-            imageUrl=imageUrl,
-            **kwargs
-        )
-    
-    def api_info(self):
-        return {
-            "type": "object",
-            "properties": {
-                "rotate_deg": {"type": "number"},
-                "move_forward": {"type": "number"},
-                "vertical_tilt": {"type": "number"},
-                "wideangle": {"type": "boolean"}
+                return;
             }
+            
+            const loader = new THREE.TextureLoader();
+            loader.crossOrigin = 'anonymous';
+            loader.load(url, (texture) => {
+                texture.minFilter = THREE.LinearFilter;
+                texture.magFilter = THREE.LinearFilter;
+                planeMaterial.map = texture;
+                planeMaterial.needsUpdate = true;
+                
+                const img = texture.image;
+                if (img && img.width && img.height) {
+                    const aspect = img.width / img.height;
+                    const maxSize = 1.4;
+                    let planeWidth, planeHeight;
+                    if (aspect > 1) {
+                        planeWidth = maxSize;
+                        planeHeight = maxSize / aspect;
+                    } else {
+                        planeHeight = maxSize;
+                        planeWidth = maxSize * aspect;
+                    }
+                    scene.remove(targetPlane);
+                    targetPlane = new THREE.Mesh(new THREE.PlaneGeometry(planeWidth, planeHeight), planeMaterial);
+                    targetPlane.position.copy(CENTER);
+                    scene.add(targetPlane);
+                }
+            });
         }
+        
+        if (props.imageUrl) {
+            updateTextureFromUrl(props.imageUrl);
+        }
+        
+        const cameraGroup = new THREE.Group();
+        const bodyMat = new THREE.MeshStandardMaterial({ color: 0x6699cc, metalness: 0.5, roughness: 0.3 });
+        const body = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.2, 0.35), bodyMat);
+        cameraGroup.add(body);
+        const lens = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.08, 0.1, 0.16, 16),
+            new THREE.MeshStandardMaterial({ color: 0x6699cc, metalness: 0.5, roughness: 0.3 })
+        );
+        lens.rotation.x = Math.PI / 2;
+        lens.position.z = 0.24;
+        cameraGroup.add(lens);
+        scene.add(cameraGroup);
+        
+        const rotationArcPoints = [];
+        for (let i = 0; i <= 32; i++) {
+            const angle = THREE.MathUtils.degToRad(-90 + (180 * i / 32));
+            rotationArcPoints.push(new THREE.Vector3(ROTATION_RADIUS * Math.sin(angle), 0.05, ROTATION_RADIUS * Math.cos(angle)));
+        }
+        const rotationCurve = new THREE.CatmullRomCurve3(rotationArcPoints);
+        const rotationArc = new THREE.Mesh(
+            new THREE.TubeGeometry(rotationCurve, 32, 0.035, 8, false),
+            new THREE.MeshStandardMaterial({ color: 0x00ff88, emissive: 0x00ff88, emissiveIntensity: 0.3 })
+        );
+        scene.add(rotationArc);
+        
+        const rotationHandle = new THREE.Mesh(
+            new THREE.SphereGeometry(0.16, 16, 16),
+            new THREE.MeshStandardMaterial({ color: 0x00ff88, emissive: 0x00ff88, emissiveIntensity: 0.5 })
+        );
+        rotationHandle.userData.type = 'rotation';
+        scene.add(rotationHandle);
+        
+        const tiltArcPoints = [];
+        for (let i = 0; i <= 32; i++) {
+            const angle = THREE.MathUtils.degToRad(-45 + (90 * i / 32));
+            tiltArcPoints.push(new THREE.Vector3(-0.7, TILT_RADIUS * Math.sin(angle) + CENTER.y, TILT_RADIUS * Math.cos(angle)));
+        }
+        const tiltCurve = new THREE.CatmullRomCurve3(tiltArcPoints);
+        const tiltArc = new THREE.Mesh(
+            new THREE.TubeGeometry(tiltCurve, 32, 0.035, 8, false),
+            new THREE.MeshStandardMaterial({ color: 0xff69b4, emissive: 0xff69b4, emissiveIntensity: 0.3 })
+        );
+        scene.add(tiltArc);
+        
+        const tiltHandle = new THREE.Mesh(
+            new THREE.SphereGeometry(0.16, 16, 16),
+            new THREE.MeshStandardMaterial({ color: 0xff69b4, emissive: 0xff69b4, emissiveIntensity: 0.5 })
+        );
+        tiltHandle.userData.type = 'tilt';
+        scene.add(tiltHandle);
+        
+        const distanceLineGeo = new THREE.BufferGeometry();
+        const distanceLine = new THREE.Line(distanceLineGeo, new THREE.LineBasicMaterial({ color: 0xffa500 }));
+        scene.add(distanceLine);
+        
+        const distanceHandle = new THREE.Mesh(
+            new THREE.SphereGeometry(0.16, 16, 16),
+            new THREE.MeshStandardMaterial({ color: 0xffa500, emissive: 0xffa500, emissiveIntensity: 0.5 })
+        );
+        distanceHandle.userData.type = 'distance';
+        scene.add(distanceHandle);
+        
+        function buildPromptText(rot, fwd, tilt, wide) {
+            const parts = [];
+            if (rot !== 0) {
+                const dir = rot > 0 ? 'left' : 'right';
+                parts.push('Rotate ' + Math.abs(rot) + '° ' + dir);
+            }
+            if (fwd > 5) parts.push('Close-up');
+            else if (fwd >= 1) parts.push('Move forward');
+            if (tilt <= -1) parts.push("Bird's-eye");
+            else if (tilt >= 1) parts.push("Worm's-eye");
+            if (wide) parts.push('Wide-angle');
+            return parts.length > 0 ? parts.join(' • ') : 'No camera movement';
+        }
+        
+        function updatePositions() {
+            const rotRad = THREE.MathUtils.degToRad(-rotateDeg);
+            const distance = BASE_DISTANCE - (moveForward / 10) * 1.0;
+            const tiltAngle = verticalTilt * 35;
+            const tiltRad = THREE.MathUtils.degToRad(tiltAngle);
+            
+            const camX = distance * Math.sin(rotRad) * Math.cos(tiltRad);
+            const camY = distance * Math.sin(tiltRad) + CENTER.y;
+            const camZ = distance * Math.cos(rotRad) * Math.cos(tiltRad);
+            
+            cameraGroup.position.set(camX, camY, camZ);
+            cameraGroup.lookAt(CENTER);
+            
+            rotationHandle.position.set(ROTATION_RADIUS * Math.sin(rotRad), 0.05, ROTATION_RADIUS * Math.cos(rotRad));
+            
+            const tiltHandleAngle = THREE.MathUtils.degToRad(tiltAngle);
+            tiltHandle.position.set(-0.7, TILT_RADIUS * Math.sin(tiltHandleAngle) + CENTER.y, TILT_RADIUS * Math.cos(tiltHandleAngle));
+            
+            const handleDist = distance - 0.4;
+            distanceHandle.position.set(
+                handleDist * Math.sin(rotRad) * Math.cos(tiltRad),
+                handleDist * Math.sin(tiltRad) + CENTER.y,
+                handleDist * Math.cos(rotRad) * Math.cos(tiltRad)
+            );
+            distanceLineGeo.setFromPoints([cameraGroup.position.clone(), CENTER.clone()]);
+            
+            promptOverlay.textContent = buildPromptText(rotateDeg, moveForward, verticalTilt, wideangle);
+        }
+        
+        function updatePropsAndTrigger() {
+            const rotSnap = snapToNearest(rotateDeg, rotateSteps);
+            const fwdSnap = snapToNearest(moveForward, forwardSteps);
+            const tiltSnap = snapToNearest(verticalTilt, tiltSteps);
+            
+            props.value = { rotate_deg: rotSnap, move_forward: fwdSnap, vertical_tilt: tiltSnap, wideangle: wideangle };
+            trigger('change', props.value);
+        }
+        
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+        let isDragging = false;
+        let dragTarget = null;
+        let dragStartMouse = new THREE.Vector2();
+        let dragStartForward = 0;
+        const intersection = new THREE.Vector3();
+        
+        const canvas = renderer.domElement;
+        
+        canvas.addEventListener('mousedown', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+            mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+            
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects([rotationHandle, tiltHandle, distanceHandle]);
+            
+            if (intersects.length > 0) {
+                isDragging = true;
+                dragTarget = intersects[0].object;
+                dragTarget.material.emissiveIntensity = 1.0;
+                dragTarget.scale.setScalar(1.3);
+                dragStartMouse.copy(mouse);
+                dragStartForward = moveForward;
+                canvas.style.cursor = 'grabbing';
+            }
+        });
+        
+        canvas.addEventListener('mousemove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+            mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+            
+            if (isDragging && dragTarget) {
+                raycaster.setFromCamera(mouse, camera);
+                
+                if (dragTarget.userData.type === 'rotation') {
+                    const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -0.05);
+                    if (raycaster.ray.intersectPlane(plane, intersection)) {
+                        let angle = THREE.MathUtils.radToDeg(Math.atan2(intersection.x, intersection.z));
+                        rotateDeg = THREE.MathUtils.clamp(-angle, -90, 90);
+                    }
+                } else if (dragTarget.userData.type === 'tilt') {
+                    const plane = new THREE.Plane(new THREE.Vector3(1, 0, 0), 0.7);
+                    if (raycaster.ray.intersectPlane(plane, intersection)) {
+                        const relY = intersection.y - CENTER.y;
+                        const relZ = intersection.z;
+                        const angle = THREE.MathUtils.radToDeg(Math.atan2(relY, relZ));
+                        verticalTilt = THREE.MathUtils.clamp(angle / 35, -1, 1);
+                    }
+                } else if (dragTarget.userData.type === 'distance') {
+                    const deltaY = mouse.y - dragStartMouse.y;
+                    moveForward = THREE.MathUtils.clamp(dragStartForward + deltaY * 12, 0, 10);
+                }
+                updatePositions();
+            } else {
+                raycaster.setFromCamera(mouse, camera);
+                const intersects = raycaster.intersectObjects([rotationHandle, tiltHandle, distanceHandle]);
+                [rotationHandle, tiltHandle, distanceHandle].forEach(h => {
+                    h.material.emissiveIntensity = 0.5;
+                    h.scale.setScalar(1);
+                });
+                if (intersects.length > 0) {
+                    intersects[0].object.material.emissiveIntensity = 0.8;
+                    intersects[0].object.scale.setScalar(1.1);
+                    canvas.style.cursor = 'grab';
+                } else {
+                    canvas.style.cursor = 'default';
+                }
+            }
+        });
+        
+        const onMouseUp = () => {
+            if (dragTarget) {
+                dragTarget.material.emissiveIntensity = 0.5;
+                dragTarget.scale.setScalar(1);
+                
+                const targetRot = snapToNearest(rotateDeg, rotateSteps);
+                const targetFwd = snapToNearest(moveForward, forwardSteps);
+                const targetTilt = snapToNearest(verticalTilt, tiltSteps);
+                
+                const startRot = rotateDeg, startFwd = moveForward, startTilt = verticalTilt;
+                const startTime = Date.now();
+                
+                function animateSnap() {
+                    const t = Math.min((Date.now() - startTime) / 200, 1);
+                    const ease = 1 - Math.pow(1 - t, 3);
+                    
+                    rotateDeg = startRot + (targetRot - startRot) * ease;
+                    moveForward = startFwd + (targetFwd - startFwd) * ease;
+                    verticalTilt = startTilt + (targetTilt - startTilt) * ease;
+                    
+                    updatePositions();
+                    if (t < 1) requestAnimationFrame(animateSnap);
+                    else updatePropsAndTrigger();
+                }
+                animateSnap();
+            }
+            isDragging = false;
+            dragTarget = null;
+            canvas.style.cursor = 'default';
+        };
+        
+        canvas.addEventListener('mouseup', onMouseUp);
+        canvas.addEventListener('mouseleave', onMouseUp);
+
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            const touch = e.touches[0];
+            const rect = canvas.getBoundingClientRect();
+            mouse.x = ((touch.clientX - rect.left) / rect.width) * 2 - 1;
+            mouse.y = -((touch.clientY - rect.top) / rect.height) * 2 + 1;
+            
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects([rotationHandle, tiltHandle, distanceHandle]);
+            
+            if (intersects.length > 0) {
+                isDragging = true;
+                dragTarget = intersects[0].object;
+                dragTarget.material.emissiveIntensity = 1.0;
+                dragTarget.scale.setScalar(1.3);
+                dragStartMouse.copy(mouse);
+                dragStartForward = moveForward;
+            }
+        }, { passive: false });
+        
+        canvas.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            const touch = e.touches[0];
+            const rect = canvas.getBoundingClientRect();
+            mouse.x = ((touch.clientX - rect.left) / rect.width) * 2 - 1;
+            mouse.y = -((touch.clientY - rect.top) / rect.height) * 2 + 1;
+            
+            if (isDragging && dragTarget) {
+                raycaster.setFromCamera(mouse, camera);
+                
+                if (dragTarget.userData.type === 'rotation') {
+                    const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -0.05);
+                    if (raycaster.ray.intersectPlane(plane, intersection)) {
+                        let angle = THREE.MathUtils.radToDeg(Math.atan2(intersection.x, intersection.z));
+                        rotateDeg = THREE.MathUtils.clamp(-angle, -90, 90);
+                    }
+                } else if (dragTarget.userData.type === 'tilt') {
+                    const plane = new THREE.Plane(new THREE.Vector3(1, 0, 0), 0.7);
+                    if (raycaster.ray.intersectPlane(plane, intersection)) {
+                        const relY = intersection.y - CENTER.y;
+                        const relZ = intersection.z;
+                        const angle = THREE.MathUtils.radToDeg(Math.atan2(relY, relZ));
+                        verticalTilt = THREE.MathUtils.clamp(angle / 35, -1, 1);
+                    }
+                } else if (dragTarget.userData.type === 'distance') {
+                    const deltaY = mouse.y - dragStartMouse.y;
+                    moveForward = THREE.MathUtils.clamp(dragStartForward + deltaY * 12, 0, 10);
+                }
+                updatePositions();
+            }
+        }, { passive: false });
+        
+        canvas.addEventListener('touchend', (e) => { e.preventDefault(); onMouseUp(); }, { passive: false });
+        canvas.addEventListener('touchcancel', (e) => { e.preventDefault(); onMouseUp(); }, { passive: false });
+        
+        updatePositions();
+        
+        function render() {
+            requestAnimationFrame(render);
+            renderer.render(scene, camera);
+        }
+        render();
+        
+        new ResizeObserver(() => {
+            camera.aspect = wrapper.clientWidth / wrapper.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(wrapper.clientWidth, wrapper.clientHeight);
+        }).observe(wrapper);
+        
+        wrapper._updateTexture = updateTextureFromUrl;
+        
+        let lastImageUrl = props.imageUrl;
+        let lastValue = JSON.stringify(props.value);
+        setInterval(() => {
+            if (props.imageUrl !== lastImageUrl) {
+                lastImageUrl = props.imageUrl;
+                updateTextureFromUrl(props.imageUrl);
+            }
+            const currentValue = JSON.stringify(props.value);
+            if (currentValue !== lastValue) {
+                lastValue = currentValue;
+                if (props.value && typeof props.value === 'object') {
+                    rotateDeg = props.value.rotate_deg ?? rotateDeg;
+                    moveForward = props.value.move_forward ?? moveForward;
+                    verticalTilt = props.value.vertical_tilt ?? verticalTilt;
+                    wideangle = props.value.wideangle ?? wideangle;
+                    updatePositions();
+                }
+            }
+        }, 100);
+    };
+    
+    initScene();
+})();
+"""
+
+
+def create_camera_3d_component(value=None, imageUrl=None, **kwargs):
+    """Create a 3D camera control component using gr.HTML."""
+    if value is None:
+        value = {"rotate_deg": 0, "move_forward": 0, "vertical_tilt": 0, "wideangle": False}
+    
+    return gr.HTML(
+        value=value,
+        html_template=CAMERA_3D_HTML_TEMPLATE,
+        js_on_load=CAMERA_3D_JS,
+        imageUrl=imageUrl,
+        **kwargs
+    )
 
 
 # --- UI ---
@@ -727,7 +715,7 @@ with gr.Blocks(css=css, theme=gr.themes.Citrus()) as demo:
             gr.Markdown("### 🎮 3D Camera Control")
             gr.Markdown("*Drag the handles: 🟢 Rotation, 🩷 Tilt, 🟠 Distance*")
             
-            camera_3d = CameraControl3D(
+            camera_3d = create_camera_3d_component(
                 value={"rotate_deg": 0, "move_forward": 0, "vertical_tilt": 0, "wideangle": False},
                 elem_id="camera-3d-control"
             )
@@ -857,20 +845,7 @@ with gr.Blocks(css=css, theme=gr.themes.Citrus()) as demo:
     
     run_event.then(lambda img, *_: img, inputs=[result], outputs=[prev_output])
     
-    # Examples
-    def infer_and_sync_3d(img, rot, fwd, tilt, wide, s, rand_s, cfg, steps, h, w):
-        result_img, result_seed, result_prompt = infer_camera_edit(img, rot, fwd, tilt, wide, s, rand_s, cfg, steps, h, w, None)
-        camera_value = {"rotate_deg": rot, "move_forward": fwd, "vertical_tilt": tilt, "wideangle": wide}
-        if img is not None:
-            buffered = BytesIO()
-            img.save(buffered, format="PNG")
-            img_str = base64.b64encode(buffered.getvalue()).decode()
-            data_url = f"data:image/png;base64,{img_str}"
-            camera_update = gr.update(value=camera_value, imageUrl=data_url)
-        else:
-            camera_update = gr.update(value=camera_value)
-        return result_img, result_seed, result_prompt, camera_update
-    
+    # Examples - don't include camera_3d in outputs to avoid caching issues
     gr.Examples(
         examples=[
             ["tool_of_the_sea.png", 90, 0, 0, False, 0, True, 1.0, 4, 568, 1024],
@@ -880,12 +855,27 @@ with gr.Blocks(css=css, theme=gr.themes.Citrus()) as demo:
             ["grumpy.png", 90, 0, 1, False, 0, True, 1.0, 4, 576, 1024]
         ],
         inputs=[image, rotate_deg, move_forward, vertical_tilt, wideangle, seed, randomize_seed, true_guidance_scale, num_inference_steps, height, width],
-        outputs=outputs + [camera_3d],
-        fn=infer_and_sync_3d,
+        outputs=outputs,
+        fn=infer_camera_edit,
         cache_examples=True,
         cache_mode="lazy",
         elem_id="examples"
     )
+    
+    # Sync 3D component when sliders change (covers example loading)
+    def sync_3d_on_slider_change(img, rot, fwd, tilt, wide):
+        camera_value = {"rotate_deg": rot, "move_forward": fwd, "vertical_tilt": tilt, "wideangle": wide}
+        if img is not None:
+            buffered = BytesIO()
+            img.save(buffered, format="PNG")
+            img_str = base64.b64encode(buffered.getvalue()).decode()
+            data_url = f"data:image/png;base64,{img_str}"
+            return gr.update(value=camera_value, imageUrl=data_url)
+        return gr.update(value=camera_value)
+    
+    # When any slider value changes (including from examples), sync the 3D component
+    for slider in [rotate_deg, move_forward, vertical_tilt]:
+        slider.change(fn=sync_3d_on_slider_change, inputs=[image, rotate_deg, move_forward, vertical_tilt, wideangle], outputs=[camera_3d])
     
     gr.api(infer_camera_edit, api_name="infer_edit_camera_angles")
     gr.api(create_video_between_images, api_name="create_video_between_images")
