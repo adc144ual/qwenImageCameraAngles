@@ -93,9 +93,9 @@ def build_camera_prompt(
     elif move_forward >= 1:
         prompt_parts.append("将镜头向前移动 Move the camera forward.")
 
-    if vertical_tilt <= -1:
+    if vertical_tilt >= 1:
         prompt_parts.append("将相机转向鸟瞰视角 Turn the camera to a bird's-eye view.")
-    elif vertical_tilt >= 1:
+    elif vertical_tilt <= -1:
         prompt_parts.append("将相机切换到仰视视角 Turn the camera to a worm's-eye view.")
 
     if wideangle:
@@ -395,8 +395,8 @@ CAMERA_3D_JS = """
             }
             if (fwd > 5) parts.push('Close-up');
             else if (fwd >= 1) parts.push('Move forward');
-            if (tilt <= -1) parts.push("Bird's-eye");
-            else if (tilt >= 1) parts.push("Worm's-eye");
+            if (tilt >= 1) parts.push("Bird's-eye");
+            else if (tilt <= -1) parts.push("Worm's-eye");
             if (wide) parts.push('Wide-angle');
             return parts.length > 0 ? parts.join(' • ') : 'No camera movement';
         }
@@ -740,7 +740,7 @@ with gr.Blocks(css=css, theme=gr.themes.Citrus()) as demo:
             
             rotate_deg = gr.Slider(label="Rotate Right ↔ Left (°)", minimum=-90, maximum=90, step=45, value=0)
             move_forward = gr.Slider(label="Move Forward → Close-Up", minimum=0, maximum=10, step=5, value=0)
-            vertical_tilt = gr.Slider(label="Vertical: Bird's-eye ↔ Worm's-eye", minimum=-1, maximum=1, step=1, value=0)
+            vertical_tilt = gr.Slider(label="Vertical: Worm's-eye ↔ Bird's-eye", minimum=-1, maximum=1, step=1, value=0)
             wideangle = gr.Checkbox(label="🔭 Wide-Angle Lens", value=False)
 
             prompt_preview = gr.Textbox(label="Generated Prompt", interactive=False)
