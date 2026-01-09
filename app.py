@@ -3,19 +3,15 @@ import numpy as np
 import random
 import torch
 import spaces
+import base64
+from io import BytesIO
 
 from PIL import Image
 from diffusers import FlowMatchEulerDiscreteScheduler
 from qwenimage.pipeline_qwenimage_edit_plus import QwenImageEditPlusPipeline
 from qwenimage.transformer_qwenimage import QwenImageTransformer2DModel
 
-import math
-from huggingface_hub import hf_hub_download
-from safetensors.torch import load_file
-
-from PIL import Image
 import os
-import gradio as gr
 from gradio_client import Client, handle_file
 import tempfile
 from typing import Optional, Tuple, Any
@@ -57,10 +53,7 @@ def _generate_video_segment(
     prompt: str,
     request: gr.Request
 ) -> str:
-    """
-    Generate a single video segment between two frames by calling an external
-    Wan 2.2 image-to-video service hosted on Hugging Face Spaces.
-    """
+    """Generate a single video segment between two frames."""
     x_ip_token = request.headers['x-ip-token']
     video_client = Client(
         "multimodalart/wan-2-2-first-last-frame",
@@ -81,12 +74,9 @@ def build_camera_prompt(
     vertical_tilt: float = 0.0,
     wideangle: bool = False
 ) -> str:
-    """
-    Build a camera movement prompt based on the chosen controls.
-    """
+    """Build a camera movement prompt based on the chosen controls."""
     prompt_parts = []
 
-    # Rotation
     if rotate_deg != 0:
         direction = "left" if rotate_deg > 0 else "right"
         if direction == "left":
@@ -98,19 +88,16 @@ def build_camera_prompt(
                 f"将镜头向右旋转{abs(rotate_deg)}度 Rotate the camera {abs(rotate_deg)} degrees to the right."
             )
 
-    # Move forward / close-up
     if move_forward > 5:
         prompt_parts.append("将镜头转为特写镜头 Turn the camera to a close-up.")
     elif move_forward >= 1:
         prompt_parts.append("将镜头向前移动 Move the camera forward.")
 
-    # Vertical tilt
     if vertical_tilt <= -1:
         prompt_parts.append("将相机转向鸟瞰视角 Turn the camera to a bird's-eye view.")
     elif vertical_tilt >= 1:
         prompt_parts.append("将相机切换到仰视视角 Turn the camera to a worm's-eye view.")
 
-    # Lens option
     if wideangle:
         prompt_parts.append("将镜头转为广角镜头 Turn the camera to a wide-angle lens.")
 
@@ -133,9 +120,7 @@ def infer_camera_edit(
     width: Optional[int] = None,
     prev_output: Optional[Image.Image] = None,
 ) -> Tuple[Image.Image, int, str]:
-    """
-    Edit the camera angles/view of an image with Qwen Image Edit 2509.
-    """
+    """Edit the camera angles/view of an image with Qwen Image Edit 2509."""
     progress = gr.Progress(track_tqdm=True)
     
     prompt = build_camera_prompt(rotate_deg, move_forward, vertical_tilt, wideangle)
@@ -145,7 +130,6 @@ def infer_camera_edit(
         seed = random.randint(0, MAX_SEED)
     generator = torch.Generator(device=device).manual_seed(seed)
 
-    # Choose input image (prefer uploaded, else last output)
     pil_images = []
     if image is not None:
         if isinstance(image, Image.Image):
@@ -181,9 +165,7 @@ def create_video_between_images(
     prompt: str,
     request: gr.Request
 ) -> str:
-    """
-    Create a short transition video between the input and output images.
-    """
+    """Create a short transition video between the input and output images."""
     if input_image is None or output_image is None:
         raise gr.Error("Both input and output images are required to create a video.")
 
@@ -240,7 +222,6 @@ class CameraControl3D(gr.HTML):
                     return;
                 }
                 
-                // Scene setup
                 const scene = new THREE.Scene();
                 scene.background = new THREE.Color(0x1a1a1a);
                 
@@ -253,28 +234,23 @@ class CameraControl3D(gr.HTML):
                 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
                 wrapper.insertBefore(renderer.domElement, wrapper.firstChild);
                 
-                // Lighting
                 scene.add(new THREE.AmbientLight(0xffffff, 0.6));
                 const dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
                 dirLight.position.set(5, 10, 5);
                 scene.add(dirLight);
                 
-                // Grid
                 scene.add(new THREE.GridHelper(6, 12, 0x333333, 0x222222));
                 
-                // Constants
                 const CENTER = new THREE.Vector3(0, 0.75, 0);
                 const BASE_DISTANCE = 2.0;
                 const ROTATION_RADIUS = 2.2;
                 const TILT_RADIUS = 1.6;
                 
-                // State - mapped from 2509 controls
-                let rotateDeg = props.value?.rotate_deg || 0;      // -90 to 90
-                let moveForward = props.value?.move_forward || 0;  // 0 to 10
-                let verticalTilt = props.value?.vertical_tilt || 0; // -1 to 1
+                let rotateDeg = props.value?.rotate_deg || 0;
+                let moveForward = props.value?.move_forward || 0;
+                let verticalTilt = props.value?.vertical_tilt || 0;
                 let wideangle = props.value?.wideangle || false;
                 
-                // Valid steps for 2509
                 const rotateSteps = [-90, -45, 0, 45, 90];
                 const forwardSteps = [0, 5, 10];
                 const tiltSteps = [-1, 0, 1];
@@ -283,7 +259,6 @@ class CameraControl3D(gr.HTML):
                     return steps.reduce((prev, curr) => Math.abs(curr - value) < Math.abs(prev - value) ? curr : prev);
                 }
                 
-                // Create placeholder texture
                 function createPlaceholderTexture() {
                     const canvas = document.createElement('canvas');
                     canvas.width = 256;
@@ -308,14 +283,12 @@ class CameraControl3D(gr.HTML):
                     return new THREE.CanvasTexture(canvas);
                 }
                 
-                // Target image plane
                 let currentTexture = createPlaceholderTexture();
                 const planeMaterial = new THREE.MeshBasicMaterial({ map: currentTexture, side: THREE.DoubleSide });
                 let targetPlane = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 1.2), planeMaterial);
                 targetPlane.position.copy(CENTER);
                 scene.add(targetPlane);
                 
-                // Function to update texture from image URL
                 function updateTextureFromUrl(url) {
                     if (!url) {
                         planeMaterial.map = createPlaceholderTexture();
@@ -348,10 +321,7 @@ class CameraControl3D(gr.HTML):
                                 planeWidth = maxSize * aspect;
                             }
                             scene.remove(targetPlane);
-                            targetPlane = new THREE.Mesh(
-                                new THREE.PlaneGeometry(planeWidth, planeHeight),
-                                planeMaterial
-                            );
+                            targetPlane = new THREE.Mesh(new THREE.PlaneGeometry(planeWidth, planeHeight), planeMaterial);
                             targetPlane.position.copy(CENTER);
                             scene.add(targetPlane);
                         }
@@ -362,7 +332,6 @@ class CameraControl3D(gr.HTML):
                     updateTextureFromUrl(props.imageUrl);
                 }
                 
-                // Camera model
                 const cameraGroup = new THREE.Group();
                 const bodyMat = new THREE.MeshStandardMaterial({ color: 0x6699cc, metalness: 0.5, roughness: 0.3 });
                 const body = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.2, 0.35), bodyMat);
@@ -376,15 +345,10 @@ class CameraControl3D(gr.HTML):
                 cameraGroup.add(lens);
                 scene.add(cameraGroup);
                 
-                // GREEN: Rotation arc (horizontal) - maps to rotate_deg (-90 to 90)
                 const rotationArcPoints = [];
                 for (let i = 0; i <= 32; i++) {
                     const angle = THREE.MathUtils.degToRad(-90 + (180 * i / 32));
-                    rotationArcPoints.push(new THREE.Vector3(
-                        ROTATION_RADIUS * Math.sin(angle),
-                        0.05,
-                        ROTATION_RADIUS * Math.cos(angle)
-                    ));
+                    rotationArcPoints.push(new THREE.Vector3(ROTATION_RADIUS * Math.sin(angle), 0.05, ROTATION_RADIUS * Math.cos(angle)));
                 }
                 const rotationCurve = new THREE.CatmullRomCurve3(rotationArcPoints);
                 const rotationArc = new THREE.Mesh(
@@ -400,15 +364,10 @@ class CameraControl3D(gr.HTML):
                 rotationHandle.userData.type = 'rotation';
                 scene.add(rotationHandle);
                 
-                // PINK: Vertical tilt arc - maps to vertical_tilt (-1 to 1)
                 const tiltArcPoints = [];
                 for (let i = 0; i <= 32; i++) {
                     const angle = THREE.MathUtils.degToRad(-45 + (90 * i / 32));
-                    tiltArcPoints.push(new THREE.Vector3(
-                        -0.7,
-                        TILT_RADIUS * Math.sin(angle) + CENTER.y,
-                        TILT_RADIUS * Math.cos(angle)
-                    ));
+                    tiltArcPoints.push(new THREE.Vector3(-0.7, TILT_RADIUS * Math.sin(angle) + CENTER.y, TILT_RADIUS * Math.cos(angle)));
                 }
                 const tiltCurve = new THREE.CatmullRomCurve3(tiltArcPoints);
                 const tiltArc = new THREE.Mesh(
@@ -424,9 +383,8 @@ class CameraControl3D(gr.HTML):
                 tiltHandle.userData.type = 'tilt';
                 scene.add(tiltHandle);
                 
-                // ORANGE: Distance line & handle - maps to move_forward (0-10)
                 const distanceLineGeo = new THREE.BufferGeometry();
-                const distanceLine = new THREE.Line(distanceLineGeo, new THREE.LineBasicMaterial({ color: 0xffa500, linewidth: 2 }));
+                const distanceLine = new THREE.Line(distanceLineGeo, new THREE.LineBasicMaterial({ color: 0xffa500 }));
                 scene.add(distanceLine);
                 
                 const distanceHandle = new THREE.Mesh(
@@ -440,38 +398,22 @@ class CameraControl3D(gr.HTML):
                     const parts = [];
                     if (rot !== 0) {
                         const dir = rot > 0 ? 'left' : 'right';
-                        parts.push(`Rotate ${Math.abs(rot)}° ${dir}`);
+                        parts.push('Rotate ' + Math.abs(rot) + '° ' + dir);
                     }
-                    if (fwd > 5) {
-                        parts.push('Close-up');
-                    } else if (fwd >= 1) {
-                        parts.push('Move forward');
-                    }
-                    if (tilt <= -1) {
-                        parts.push("Bird's-eye");
-                    } else if (tilt >= 1) {
-                        parts.push("Worm's-eye");
-                    }
-                    if (wide) {
-                        parts.push('Wide-angle');
-                    }
+                    if (fwd > 5) parts.push('Close-up');
+                    else if (fwd >= 1) parts.push('Move forward');
+                    if (tilt <= -1) parts.push("Bird's-eye");
+                    else if (tilt >= 1) parts.push("Worm's-eye");
+                    if (wide) parts.push('Wide-angle');
                     return parts.length > 0 ? parts.join(' • ') : 'No camera movement';
                 }
                 
                 function updatePositions() {
-                    // Map controls to 3D positions
-                    // rotateDeg: -90 (right) to 90 (left) -> camera orbits around subject
-                    // Note: positive rotateDeg = rotate left = camera moves right
                     const rotRad = THREE.MathUtils.degToRad(-rotateDeg);
-                    
-                    // moveForward: 0 to 10 -> distance from 2.0 to 1.0
                     const distance = BASE_DISTANCE - (moveForward / 10) * 1.0;
-                    
-                    // verticalTilt: -1 (bird's eye) to 1 (worm's eye) -> elevation angle
-                    const tiltAngle = verticalTilt * 35; // -35 to 35 degrees
+                    const tiltAngle = verticalTilt * 35;
                     const tiltRad = THREE.MathUtils.degToRad(tiltAngle);
                     
-                    // Camera position
                     const camX = distance * Math.sin(rotRad) * Math.cos(tiltRad);
                     const camY = distance * Math.sin(tiltRad) + CENTER.y;
                     const camZ = distance * Math.cos(rotRad) * Math.cos(tiltRad);
@@ -479,21 +421,11 @@ class CameraControl3D(gr.HTML):
                     cameraGroup.position.set(camX, camY, camZ);
                     cameraGroup.lookAt(CENTER);
                     
-                    // Update handles
-                    rotationHandle.position.set(
-                        ROTATION_RADIUS * Math.sin(rotRad),
-                        0.05,
-                        ROTATION_RADIUS * Math.cos(rotRad)
-                    );
+                    rotationHandle.position.set(ROTATION_RADIUS * Math.sin(rotRad), 0.05, ROTATION_RADIUS * Math.cos(rotRad));
                     
                     const tiltHandleAngle = THREE.MathUtils.degToRad(tiltAngle);
-                    tiltHandle.position.set(
-                        -0.7,
-                        TILT_RADIUS * Math.sin(tiltHandleAngle) + CENTER.y,
-                        TILT_RADIUS * Math.cos(tiltHandleAngle)
-                    );
+                    tiltHandle.position.set(-0.7, TILT_RADIUS * Math.sin(tiltHandleAngle) + CENTER.y, TILT_RADIUS * Math.cos(tiltHandleAngle));
                     
-                    // Distance handle - positioned along the line from camera to center
                     const handleDist = distance - 0.4;
                     distanceHandle.position.set(
                         handleDist * Math.sin(rotRad) * Math.cos(tiltRad),
@@ -502,7 +434,6 @@ class CameraControl3D(gr.HTML):
                     );
                     distanceLineGeo.setFromPoints([cameraGroup.position.clone(), CENTER.clone()]);
                     
-                    // Update prompt overlay
                     promptOverlay.textContent = buildPromptText(rotateDeg, moveForward, verticalTilt, wideangle);
                 }
                 
@@ -511,16 +442,10 @@ class CameraControl3D(gr.HTML):
                     const fwdSnap = snapToNearest(moveForward, forwardSteps);
                     const tiltSnap = snapToNearest(verticalTilt, tiltSteps);
                     
-                    props.value = {
-                        rotate_deg: rotSnap,
-                        move_forward: fwdSnap,
-                        vertical_tilt: tiltSnap,
-                        wideangle: wideangle
-                    };
+                    props.value = { rotate_deg: rotSnap, move_forward: fwdSnap, vertical_tilt: tiltSnap, wideangle: wideangle };
                     trigger('change', props.value);
                 }
                 
-                // Raycasting
                 const raycaster = new THREE.Raycaster();
                 const mouse = new THREE.Vector2();
                 let isDragging = false;
@@ -562,7 +487,6 @@ class CameraControl3D(gr.HTML):
                             const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -0.05);
                             if (raycaster.ray.intersectPlane(plane, intersection)) {
                                 let angle = THREE.MathUtils.radToDeg(Math.atan2(intersection.x, intersection.z));
-                                // Clamp to -90 to 90 range and invert for proper left/right
                                 rotateDeg = THREE.MathUtils.clamp(-angle, -90, 90);
                             }
                         } else if (dragTarget.userData.type === 'tilt') {
@@ -571,12 +495,10 @@ class CameraControl3D(gr.HTML):
                                 const relY = intersection.y - CENTER.y;
                                 const relZ = intersection.z;
                                 const angle = THREE.MathUtils.radToDeg(Math.atan2(relY, relZ));
-                                // Map angle to -1 to 1 range
                                 verticalTilt = THREE.MathUtils.clamp(angle / 35, -1, 1);
                             }
                         } else if (dragTarget.userData.type === 'distance') {
                             const deltaY = mouse.y - dragStartMouse.y;
-                            // Dragging up = forward (closer), dragging down = back
                             moveForward = THREE.MathUtils.clamp(dragStartForward + deltaY * 12, 0, 10);
                         }
                         updatePositions();
@@ -602,7 +524,6 @@ class CameraControl3D(gr.HTML):
                         dragTarget.material.emissiveIntensity = 0.5;
                         dragTarget.scale.setScalar(1);
                         
-                        // Snap and animate
                         const targetRot = snapToNearest(rotateDeg, rotateSteps);
                         const targetFwd = snapToNearest(moveForward, forwardSteps);
                         const targetTilt = snapToNearest(verticalTilt, tiltSteps);
@@ -632,7 +553,6 @@ class CameraControl3D(gr.HTML):
                 canvas.addEventListener('mouseup', onMouseUp);
                 canvas.addEventListener('mouseleave', onMouseUp);
 
-                // Touch support
                 canvas.addEventListener('touchstart', (e) => {
                     e.preventDefault();
                     const touch = e.touches[0];
@@ -685,37 +605,25 @@ class CameraControl3D(gr.HTML):
                     }
                 }, { passive: false });
                 
-                canvas.addEventListener('touchend', (e) => {
-                    e.preventDefault();
-                    onMouseUp();
-                }, { passive: false });
+                canvas.addEventListener('touchend', (e) => { e.preventDefault(); onMouseUp(); }, { passive: false });
+                canvas.addEventListener('touchcancel', (e) => { e.preventDefault(); onMouseUp(); }, { passive: false });
                 
-                canvas.addEventListener('touchcancel', (e) => {
-                    e.preventDefault();
-                    onMouseUp();
-                }, { passive: false });
-                
-                // Initial update
                 updatePositions();
                 
-                // Render loop
                 function render() {
                     requestAnimationFrame(render);
                     renderer.render(scene, camera);
                 }
                 render();
                 
-                // Handle resize
                 new ResizeObserver(() => {
                     camera.aspect = wrapper.clientWidth / wrapper.clientHeight;
                     camera.updateProjectionMatrix();
                     renderer.setSize(wrapper.clientWidth, wrapper.clientHeight);
                 }).observe(wrapper);
                 
-                // Store update functions
                 wrapper._updateTexture = updateTextureFromUrl;
                 
-                // Watch for prop changes
                 let lastImageUrl = props.imageUrl;
                 let lastValue = JSON.stringify(props.value);
                 setInterval(() => {
@@ -748,6 +656,17 @@ class CameraControl3D(gr.HTML):
             imageUrl=imageUrl,
             **kwargs
         )
+    
+    def api_info(self):
+        return {
+            "type": "object",
+            "properties": {
+                "rotate_deg": {"type": "number"},
+                "move_forward": {"type": "number"},
+                "vertical_tilt": {"type": "number"},
+                "wideangle": {"type": "boolean"}
+            }
+        }
 
 
 # --- UI ---
@@ -800,7 +719,6 @@ with gr.Blocks(css=css, theme=gr.themes.Citrus()) as demo:
     """)
 
     with gr.Row():
-        # Left column: Input and 3D control
         with gr.Column(scale=1):
             image = gr.Image(label="Input Image", type="pil", height=280)
             prev_output = gr.Image(value=None, visible=False)
@@ -818,7 +736,6 @@ with gr.Blocks(css=css, theme=gr.themes.Citrus()) as demo:
                 reset_btn = gr.Button("🔄 Reset", size="sm")
                 run_btn = gr.Button("🚀 Generate", variant="primary", size="lg")
         
-        # Right column: Sliders, output, and settings
         with gr.Column(scale=1):
             result = gr.Image(label="Output Image", interactive=False, height=350)
             prompt_preview = gr.Textbox(label="Generated Prompt", interactive=False)
@@ -829,71 +746,28 @@ with gr.Blocks(css=css, theme=gr.themes.Citrus()) as demo:
                 visible=False
             )
             with gr.Group(visible=False) as video_group:
-                video_output = gr.Video(
-                    label="Generated Video",
-                    buttons=["download"],
-                    autoplay=True
-                )
+                video_output = gr.Video(label="Generated Video", buttons=["download"], autoplay=True)
             
             gr.Markdown("### 🎚️ Slider Controls")
             
-            with gr.Row():
-                rotate_deg = gr.Slider(
-                    label="Rotate Right ↔ Left (°)",
-                    minimum=-90,
-                    maximum=90,
-                    step=45,
-                    value=0
-                )
-            
-            with gr.Row():
-                move_forward = gr.Slider(
-                    label="Move Forward → Close-Up",
-                    minimum=0,
-                    maximum=10,
-                    step=5,
-                    value=0
-                )
-            
-            with gr.Row():
-                vertical_tilt = gr.Slider(
-                    label="Vertical: Bird's-eye ↔ Worm's-eye",
-                    minimum=-1,
-                    maximum=1,
-                    step=1,
-                    value=0
-                )
-            
+            rotate_deg = gr.Slider(label="Rotate Right ↔ Left (°)", minimum=-90, maximum=90, step=45, value=0)
+            move_forward = gr.Slider(label="Move Forward → Close-Up", minimum=0, maximum=10, step=5, value=0)
+            vertical_tilt = gr.Slider(label="Vertical: Bird's-eye ↔ Worm's-eye", minimum=-1, maximum=1, step=1, value=0)
             wideangle = gr.Checkbox(label="🔭 Wide-Angle Lens", value=False)
             
             with gr.Accordion("⚙️ Advanced Settings", open=False):
                 seed = gr.Slider(label="Seed", minimum=0, maximum=MAX_SEED, step=1, value=0)
                 randomize_seed = gr.Checkbox(label="Randomize Seed", value=True)
-                true_guidance_scale = gr.Slider(
-                    label="True Guidance Scale",
-                    minimum=1.0,
-                    maximum=10.0,
-                    step=0.1,
-                    value=1.0
-                )
-                num_inference_steps = gr.Slider(
-                    label="Inference Steps",
-                    minimum=1,
-                    maximum=40,
-                    step=1,
-                    value=4
-                )
+                true_guidance_scale = gr.Slider(label="True Guidance Scale", minimum=1.0, maximum=10.0, step=0.1, value=1.0)
+                num_inference_steps = gr.Slider(label="Inference Steps", minimum=1, maximum=40, step=1, value=4)
                 height = gr.Slider(label="Height", minimum=256, maximum=2048, step=8, value=1024)
                 width = gr.Slider(label="Width", minimum=256, maximum=2048, step=8, value=1024)
 
-    # --- Event Handlers ---
-    
+    # --- Helper Functions ---
     def update_prompt_from_sliders(rotate, forward, tilt, wide):
-        """Update prompt preview when sliders change."""
         return build_camera_prompt(rotate, forward, tilt, wide)
     
     def sync_3d_to_sliders(camera_value):
-        """Sync 3D control changes to sliders."""
         if camera_value and isinstance(camera_value, dict):
             rot = camera_value.get('rotate_deg', 0)
             fwd = camera_value.get('move_forward', 0)
@@ -904,60 +778,38 @@ with gr.Blocks(css=css, theme=gr.themes.Citrus()) as demo:
         return gr.update(), gr.update(), gr.update(), gr.update(), gr.update()
     
     def sync_sliders_to_3d(rotate, forward, tilt, wide):
-        """Sync slider changes to 3D control."""
         return {"rotate_deg": rotate, "move_forward": forward, "vertical_tilt": tilt, "wideangle": wide}
     
-    def update_3d_image(image):
-        """Update the 3D component with the uploaded image."""
-        if image is None:
+    def update_3d_image(img):
+        if img is None:
             return gr.update(imageUrl=None)
-        import base64
-        from io import BytesIO
         buffered = BytesIO()
-        image.save(buffered, format="PNG")
+        img.save(buffered, format="PNG")
         img_str = base64.b64encode(buffered.getvalue()).decode()
         data_url = f"data:image/png;base64,{img_str}"
         return gr.update(imageUrl=data_url)
     
-    # Define inputs/outputs first (needed for event handlers)
-    inputs = [
-        image, rotate_deg, move_forward,
-        vertical_tilt, wideangle,
-        seed, randomize_seed, true_guidance_scale, num_inference_steps, height, width, prev_output
-    ]
+    # Define inputs/outputs
+    inputs = [image, rotate_deg, move_forward, vertical_tilt, wideangle, seed, randomize_seed, true_guidance_scale, num_inference_steps, height, width, prev_output]
     outputs = [result, seed, prompt_preview]
-    
-    control_inputs = [
-        image, rotate_deg, move_forward,
-        vertical_tilt, wideangle,
-        seed, randomize_seed, true_guidance_scale, num_inference_steps, height, width, prev_output
-    ]
+    control_inputs = [image, rotate_deg, move_forward, vertical_tilt, wideangle, seed, randomize_seed, true_guidance_scale, num_inference_steps, height, width, prev_output]
     control_inputs_with_flag = [is_reset] + control_inputs
     
-    # Live inference function
-    def maybe_infer(is_reset: bool, progress: gr.Progress = gr.Progress(track_tqdm=True), *args: Any):
-        if is_reset:
+    def maybe_infer(is_reset_val: bool, progress: gr.Progress = gr.Progress(track_tqdm=True), *args: Any):
+        if is_reset_val:
             return gr.update(), gr.update(), gr.update(), gr.update()
-        else:
-            result_img, result_seed, result_prompt = infer_camera_edit(*args)
-            show_button = args[0] is not None and result_img is not None
-            return result_img, result_seed, result_prompt, gr.update(visible=show_button)
+        result_img, result_seed, result_prompt = infer_camera_edit(*args)
+        show_button = args[0] is not None and result_img is not None
+        return result_img, result_seed, result_prompt, gr.update(visible=show_button)
+    
+    # --- Event Handlers ---
     
     # Slider -> Prompt preview
     for slider in [rotate_deg, move_forward, vertical_tilt]:
-        slider.change(
-            fn=update_prompt_from_sliders,
-            inputs=[rotate_deg, move_forward, vertical_tilt, wideangle],
-            outputs=[prompt_preview]
-        )
+        slider.change(fn=update_prompt_from_sliders, inputs=[rotate_deg, move_forward, vertical_tilt, wideangle], outputs=[prompt_preview])
+    wideangle.change(fn=update_prompt_from_sliders, inputs=[rotate_deg, move_forward, vertical_tilt, wideangle], outputs=[prompt_preview])
     
-    wideangle.change(
-        fn=update_prompt_from_sliders,
-        inputs=[rotate_deg, move_forward, vertical_tilt, wideangle],
-        outputs=[prompt_preview]
-    )
-    
-    # 3D control -> Sliders + Prompt + Trigger inference
+    # 3D control -> Sliders + Prompt + Inference
     camera_3d.change(
         fn=sync_3d_to_sliders,
         inputs=[camera_3d],
@@ -970,114 +822,46 @@ with gr.Blocks(css=css, theme=gr.themes.Citrus()) as demo:
     
     # Sliders -> 3D control
     for slider in [rotate_deg, move_forward, vertical_tilt]:
-        slider.release(
-            fn=sync_sliders_to_3d,
-            inputs=[rotate_deg, move_forward, vertical_tilt, wideangle],
-            outputs=[camera_3d]
-        )
+        slider.release(fn=sync_sliders_to_3d, inputs=[rotate_deg, move_forward, vertical_tilt, wideangle], outputs=[camera_3d])
+    wideangle.input(fn=sync_sliders_to_3d, inputs=[rotate_deg, move_forward, vertical_tilt, wideangle], outputs=[camera_3d])
     
-    wideangle.input(
-        fn=sync_sliders_to_3d,
-        inputs=[rotate_deg, move_forward, vertical_tilt, wideangle],
-        outputs=[camera_3d]
-    )
+    # Reset
+    reset_btn.click(fn=reset_all, inputs=None, outputs=[rotate_deg, move_forward, vertical_tilt, wideangle, is_reset], queue=False
+    ).then(fn=end_reset, inputs=None, outputs=[is_reset], queue=False
+    ).then(fn=sync_sliders_to_3d, inputs=[rotate_deg, move_forward, vertical_tilt, wideangle], outputs=[camera_3d])
     
-    # Reset behavior
-    reset_btn.click(
-        fn=reset_all,
-        inputs=None,
-        outputs=[rotate_deg, move_forward, vertical_tilt, wideangle, is_reset],
-        queue=False
-    ).then(
-        fn=end_reset,
-        inputs=None,
-        outputs=[is_reset],
-        queue=False
-    ).then(
-        fn=sync_sliders_to_3d,
-        inputs=[rotate_deg, move_forward, vertical_tilt, wideangle],
-        outputs=[camera_3d]
-    )
-    
-    # Manual generation with video button visibility control
+    # Generate button
     def infer_and_show_video_button(*args: Any):
         result_img, result_seed, result_prompt = infer_camera_edit(*args)
         show_button = args[0] is not None and result_img is not None
         return result_img, result_seed, result_prompt, gr.update(visible=show_button)
     
-    run_event = run_btn.click(
-        fn=infer_and_show_video_button,
-        inputs=inputs,
-        outputs=outputs + [create_video_button]
-    )
+    run_event = run_btn.click(fn=infer_and_show_video_button, inputs=inputs, outputs=outputs + [create_video_button])
     
     # Video creation
-    create_video_button.click(
-        fn=lambda: gr.update(visible=True),
-        outputs=[video_group],
-        api_visibility="private"
-    ).then(
-        fn=create_video_between_images,
-        inputs=[image, result, prompt_preview],
-        outputs=[video_output],
-        api_visibility="private"
-    )
+    create_video_button.click(fn=lambda: gr.update(visible=True), outputs=[video_group], api_visibility="private"
+    ).then(fn=create_video_between_images, inputs=[image, result, prompt_preview], outputs=[video_output], api_visibility="private")
     
-    # Image upload -> update dimensions AND update 3D preview
-    image.upload(
-        fn=update_dimensions_on_upload,
-        inputs=[image],
-        outputs=[width, height]
-    ).then(
-        fn=reset_all,
-        inputs=None,
-        outputs=[rotate_deg, move_forward, vertical_tilt, wideangle, is_reset],
-        queue=False
-    ).then(
-        fn=end_reset,
-        inputs=None,
-        outputs=[is_reset],
-        queue=False
-    ).then(
-        fn=update_3d_image,
-        inputs=[image],
-        outputs=[camera_3d]
-    )
+    # Image upload
+    image.upload(fn=update_dimensions_on_upload, inputs=[image], outputs=[width, height]
+    ).then(fn=reset_all, inputs=None, outputs=[rotate_deg, move_forward, vertical_tilt, wideangle, is_reset], queue=False
+    ).then(fn=end_reset, inputs=None, outputs=[is_reset], queue=False
+    ).then(fn=update_3d_image, inputs=[image], outputs=[camera_3d])
     
-    # Handle image clear
-    image.clear(
-        fn=lambda: gr.update(imageUrl=None),
-        outputs=[camera_3d]
-    )
+    image.clear(fn=lambda: gr.update(imageUrl=None), outputs=[camera_3d])
     
     # Live updates on slider release
     for control in [rotate_deg, move_forward, vertical_tilt]:
-        control.release(
-            fn=maybe_infer,
-            inputs=control_inputs_with_flag,
-            outputs=outputs + [create_video_button]
-        )
-    
-    wideangle.input(
-        fn=maybe_infer,
-        inputs=control_inputs_with_flag,
-        outputs=outputs + [create_video_button]
-    )
+        control.release(fn=maybe_infer, inputs=control_inputs_with_flag, outputs=outputs + [create_video_button])
+    wideangle.input(fn=maybe_infer, inputs=control_inputs_with_flag, outputs=outputs + [create_video_button])
     
     run_event.then(lambda img, *_: img, inputs=[result], outputs=[prev_output])
     
-    # Examples - wrapper function to also update 3D component
+    # Examples
     def infer_and_sync_3d(img, rot, fwd, tilt, wide, s, rand_s, cfg, steps, h, w):
-        result_img, result_seed, result_prompt = infer_camera_edit(
-            img, rot, fwd, tilt, wide, s, rand_s, cfg, steps, h, w, None
-        )
-        # Return the 3D component update along with results
+        result_img, result_seed, result_prompt = infer_camera_edit(img, rot, fwd, tilt, wide, s, rand_s, cfg, steps, h, w, None)
         camera_value = {"rotate_deg": rot, "move_forward": fwd, "vertical_tilt": tilt, "wideangle": wide}
-        
-        # Also update the 3D component's image
         if img is not None:
-            import base64
-            from io import BytesIO
             buffered = BytesIO()
             img.save(buffered, format="PNG")
             img_str = base64.b64encode(buffered.getvalue()).decode()
@@ -1085,7 +869,6 @@ with gr.Blocks(css=css, theme=gr.themes.Citrus()) as demo:
             camera_update = gr.update(value=camera_value, imageUrl=data_url)
         else:
             camera_update = gr.update(value=camera_value)
-        
         return result_img, result_seed, result_prompt, camera_update
     
     gr.Examples(
@@ -1096,11 +879,7 @@ with gr.Blocks(css=css, theme=gr.themes.Citrus()) as demo:
             ["disaster_girl.jpg", -45, 0, 1, False, 0, True, 1.0, 4, 768, 1024],
             ["grumpy.png", 90, 0, 1, False, 0, True, 1.0, 4, 576, 1024]
         ],
-        inputs=[
-            image, rotate_deg, move_forward,
-            vertical_tilt, wideangle,
-            seed, randomize_seed, true_guidance_scale, num_inference_steps, height, width
-        ],
+        inputs=[image, rotate_deg, move_forward, vertical_tilt, wideangle, seed, randomize_seed, true_guidance_scale, num_inference_steps, height, width],
         outputs=outputs + [camera_3d],
         fn=infer_and_sync_3d,
         cache_examples=True,
