@@ -727,7 +727,6 @@ with gr.Blocks(css=css, theme=gr.themes.Citrus()) as demo:
         
         with gr.Column(scale=1):
             result = gr.Image(label="Output Image", interactive=False, height=350)
-            prompt_preview = gr.Textbox(label="Generated Prompt", interactive=False)
             
             create_video_button = gr.Button(
                 "🎥 Create Video Between Images",
@@ -743,6 +742,8 @@ with gr.Blocks(css=css, theme=gr.themes.Citrus()) as demo:
             move_forward = gr.Slider(label="Move Forward → Close-Up", minimum=0, maximum=10, step=5, value=0)
             vertical_tilt = gr.Slider(label="Vertical: Bird's-eye ↔ Worm's-eye", minimum=-1, maximum=1, step=1, value=0)
             wideangle = gr.Checkbox(label="🔭 Wide-Angle Lens", value=False)
+
+            prompt_preview = gr.Textbox(label="Generated Prompt", interactive=False)
             
             with gr.Accordion("⚙️ Advanced Settings", open=False):
                 seed = gr.Slider(label="Seed", minimum=0, maximum=MAX_SEED, step=1, value=0)
