@@ -714,7 +714,7 @@ with gr.Blocks(css=css, theme=gr.themes.Citrus()) as demo:
             is_reset = gr.Checkbox(value=False, visible=False)
             
             gr.Markdown("### 🎮 3D Camera Control")
-            gr.Markdown("*Drag the handles: 🟢 Rotation, 🩷 Tilt, 🟠 Distance*")
+            #gr.Markdown("*Drag the handles: 🟢 Rotation, 🩷 Tilt, 🟠 Distance*")
             
             camera_3d = create_camera_3d_component(
                 value={"rotate_deg": 0, "move_forward": 0, "vertical_tilt": 0, "wideangle": False},
