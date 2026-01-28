@@ -1,0 +1,5 @@
+*.zip
+MultiView*/
+*.log
+imgs_random/
+analisis/
