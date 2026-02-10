@@ -1,3 +1,11 @@
+
+import os
+# --- CONFIGURACIÓN DE ENTORNO ---
+os.environ["HF_HOME"] = "/nas/antoniodetoro/qwen/hf_cache"
+os.environ["TMPDIR"] = "/nas/antoniodetoro/qwen/tmp"
+os.environ["PYTHONNOUSERSITE"] = "1"
+
+
 import gradio as gr
 import numpy as np
 import random
@@ -11,27 +19,66 @@ from diffusers import FlowMatchEulerDiscreteScheduler
 from qwenimage.pipeline_qwenimage_edit_plus import QwenImageEditPlusPipeline
 from qwenimage.transformer_qwenimage import QwenImageTransformer2DModel
 
-import os
 from gradio_client import Client, handle_file
 import tempfile
 from typing import Optional, Tuple, Any
+
+
+
+
+# --- Model Loading ---
+# dtype = torch.bfloat16
+# device = "cuda" if torch.cuda.is_available() else "cpu"
+
+# pipe = QwenImageEditPlusPipeline.from_pretrained(
+#     "Qwen/Qwen-Image-Edit-2509",
+#     transformer=QwenImageTransformer2DModel.from_pretrained(
+#         "linoyts/Qwen-Image-Edit-Rapid-AIO",
+#         subfolder='transformer',
+#         torch_dtype=dtype,
+#         device_map='cuda'
+#     ),
+#     torch_dtype=dtype
+# ).to(device)
+
+# pipe.load_lora_weights(
+#     "dx8152/Qwen-Edit-2509-Multiple-angles",
+#     weight_name="镜头转换.safetensors",
+#     adapter_name="angles"
+# )
+
+# pipe.set_adapters(["angles"], adapter_weights=[1.])
+# pipe.fuse_lora(adapter_names=["angles"], lora_scale=1.25)
+# pipe.unload_lora_weights()
+
+# spaces.aoti_blocks_load(pipe.transformer, "zerogpu-aoti/Qwen-Image", variant="fa3")
+
 
 
 # --- Model Loading ---
 dtype = torch.bfloat16
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
+# 1. Cargamos el transformer con low_cpu_mem_usage para no saturar la RAM
+# IMPORTANTE: Eliminamos device_map='cuda' de aquí
+transformer = QwenImageTransformer2DModel.from_pretrained(
+    "linoyts/Qwen-Image-Edit-Rapid-AIO",
+    subfolder='transformer',
+    torch_dtype=dtype,
+    low_cpu_mem_usage=True 
+)
+
 pipe = QwenImageEditPlusPipeline.from_pretrained(
     "Qwen/Qwen-Image-Edit-2509",
-    transformer=QwenImageTransformer2DModel.from_pretrained(
-        "linoyts/Qwen-Image-Edit-Rapid-AIO",
-        subfolder='transformer',
-        torch_dtype=dtype,
-        device_map='cuda'
-    ),
+    transformer=transformer,
     torch_dtype=dtype
-).to(device)
+)
 
+# 2. ACTIVAR OFFLOAD (Sustituye al .to(device))
+# Esto es lo que permite que quepa en tus 24GB de VRAM
+pipe.enable_sequential_cpu_offload() 
+
+# 3. Cargar pesos LoRA
 pipe.load_lora_weights(
     "dx8152/Qwen-Edit-2509-Multiple-angles",
     weight_name="镜头转换.safetensors",
@@ -42,7 +89,9 @@ pipe.set_adapters(["angles"], adapter_weights=[1.])
 pipe.fuse_lora(adapter_names=["angles"], lora_scale=1.25)
 pipe.unload_lora_weights()
 
-spaces.aoti_blocks_load(pipe.transformer, "zerogpu-aoti/Qwen-Image", variant="fa3")
+# 4. CUIDADO AQUÍ: 
+# Si estás en tu propio servidor Jupyter, COMENTA la línea de 'spaces'
+# spaces.aoti_blocks_load(pipe.transformer, "zerogpu-aoti/Qwen-Image", variant="fa3")
 
 MAX_SEED = np.iinfo(np.int32).max
 
@@ -884,4 +933,4 @@ with gr.Blocks(css=css, theme=gr.themes.Citrus()) as demo:
 
 if __name__ == "__main__":
     head = '<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>'
-    demo.launch(mcp_server=True, head=head, footer_links=["api", "gradio", "settings"])
+    demo.launch(share=True, head=head, footer_links=["api", "gradio", "settings"])

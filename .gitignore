@@ -1,5 +1,9 @@
 *.zip
-MultiView*/
+datos/MultiView*/
+datos/Output_CSV*/
 *.log
 imgs_random/
+analisis/
+.gradio/
+__pycache__/
 analisis/
