@@ -684,15 +684,38 @@ def main():
         if rank == 1 and steps > 0:
             logger.info(f"Epoch {epoch} Loss: {avg_loss/steps}")
 
-        # Save Checkpoint (Hacked: Save split parts)
-        # Ideally reconstruct state_dict.
-        # For simplicity, Rank 0 saves part0, Rank 1 saves part1.
-        save_path = os.path.join(config.output_dir, f"epoch-{epoch}-rank-{rank}")
-        logger.info(f"Saving checkpoint to {save_path}")
-        # Need to save lora weights only ideally
-        # model_split.parameters() includes only local params.
-        torch.save(model_split.state_dict(), save_path + ".pt")
+       # ==========================================================
+        # GUARDAR CHECKPOINT: SOLO LORA Y EN UN ÚNICO ARCHIVO
+        # ==========================================================
+        
+        # 1. Cada GPU extrae solo sus pesos de LoRA y los pasa a la memoria RAM (CPU)
+        local_state_dict = model_split.state_dict()
+        local_lora_only = {
+            k: v.cpu() for k, v in local_state_dict.items() if "lora" in k
+        }
+
+        # 2. Enviar los fragmentos de LoRA de todas las GPUs hacia el Rank 0
+        gathered_lora_dicts = [None for _ in range(world_size)] if rank == 0 else None
+        dist.gather_object(
+            local_lora_only,
+            gathered_lora_dicts if rank == 0 else None,
+            dst=0
+        )
+
+        # 3. El Rank 0 fusiona todas las partes y guarda el archivo final
+        if rank == 0:
+            merged_lora = {}
+            for lora_dict in gathered_lora_dicts:
+                merged_lora.update(lora_dict)
+            
+            save_path = os.path.join(config.output_dir, f"qwen_lora_epoch_{epoch}.pt")
+            torch.save(merged_lora, save_path)
+            logger.info(f"✅ Pesos de LoRA fusionados y guardados en: {save_path}")
+
+        # 4. Barrera de sincronización obligatoria para evitar bloqueos
+        dist.barrier()
              
+    # Destruir el grupo de procesos de red una vez terminadas todas las épocas
     dist.destroy_process_group()
 
 if __name__ == "__main__":
