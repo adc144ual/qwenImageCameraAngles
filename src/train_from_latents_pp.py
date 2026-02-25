@@ -8,6 +8,14 @@ Usage:
 
 import os
 import sys
+
+
+# --- NUEVO: Añadir el directorio padre al path para encontrar 'qwenimage' ---
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+sys.path.append(parent_dir)
+# ----------------------------------------------------------------------------
+
 import argparse
 from pathlib import Path
 from dataclasses import dataclass
@@ -17,7 +25,8 @@ from torch.utils.checkpoint import checkpoint
 # --- CONFIGURACIÓN DE ENTORNO ---
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 os.environ["HF_HOME"] = "/nas/antoniodetoro/qwen/hf_cache"
-os.environ["TMPDIR"] = "/nas/antoniodetoro/qwen/tmp"
+# os.environ["TMPDIR"] = "/nas/antoniodetoro/qwen/tmp"
+os.environ["TMPDIR"] = "/dev/shm"
 os.environ["PYTHONNOUSERSITE"] = "1"
 
 import torch
@@ -33,7 +42,12 @@ from torch.distributed.pipelining import PipelineStage
 from torch.distributed.pipelining.schedules import Schedule1F1B
 
 import logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO,
+    force=True, 
+    format="[Rank %(process)d] %(message)s"
+    )
+
 logger = logging.getLogger(__name__)
 
 # Configuración
@@ -116,7 +130,13 @@ def collate_latents(batch):
         "prompt_embeds_mask": prompt_embeds_mask,
     }
 
-def init_distributed():
+def init_distributed():        
+    """
+    modificar aquí para enviar primera mitad a GPU1 y segunda mitad a GPU0.
+    De esa forma, dejamos la GPU con más VRAM (GPU0) para la parte más pesada del modelo,
+    que es la que tiene las capas finales y el y el cálculo de la pérdida, así como 12GB de VRAM
+    libres para el VAE.    
+    """""
     if "LOCAL_RANK" not in os.environ:
         # Fallback for single node manual run without torchrun (debugging)
         os.environ["LOCAL_RANK"] = "0"
@@ -480,7 +500,12 @@ def main():
     # NOTE: Loading full model on each rank is redundant but safest for structure correctness.
     # It consumes CPU RAM. If limited, we can initialize empty and load parts.
     dtype = torch.float16 # or bfloat16
-    
+
+
+    from diffusers import DiffusionPipeline
+    from qwenimage.pipeline_qwenimage_edit_plus import QwenImageEditPlusPipeline
+
+
     # 1. Load Base Model (CPU init)
     transformer = QwenImageTransformer2DModel.from_pretrained(
         config.transformer_model,
@@ -490,12 +515,52 @@ def main():
         device_map="cpu"
     )
 
+    # =====================================================================
+    # NUEVO: 1.5 Cargar y fusionar (fuse) el LoRA original
+    # =====================================================================
+    logger.info(f"Rank {rank}: Cargando y fusionando LoRA original (Angles) a través de un Pipeline temporal...")
+    
+    # Creamos un pipeline temporal en CPU solo para usar sus funciones de LoRA
+    # Le pasamos nuestro transformer para que lo modifique directamente
+    pipe = QwenImageEditPlusPipeline.from_pretrained(
+        config.base_model,
+        transformer=transformer,
+        torch_dtype=dtype,
+        text_encoder=None, # No necesitamos el text encoder para esto
+        tokenizer=None, # No necesitamos el tokenizer para esto
+        vae=None # No necesitamos el VAE para esto
+    )
+
+
+    # Cargamos el LoRA viejo directamente en el transformer
+    pipe.load_lora_weights(
+        "dx8152/Qwen-Edit-2509-Multiple-angles",
+        weight_name="镜头转换.safetensors",
+        adapter_name="old_angles"
+    )
+    
+    # Fusionamos los pesos en el modelo base (usando tu escala de 1.25)
+    pipe.fuse_lora(adapter_names=["old_angles"], lora_scale=1.25)
+
+
+    # Importante: Descargar los metadatos del adaptador para dejar el modelo 
+    # como un Transformer "limpio" y evitar conflictos con el nuevo LoRA
+    pipe.unload_lora_weights()
+
+    # Recuperamos el transformer (que ahora tiene el LoRA integrado)
+    transformer = pipe.transformer
+    
+    # Borramos el pipeline temporal para que no consuma memoria RAM
+    del pipe
+    # =====================================================================
+
+
     # 2. Split Model FIRST (This safely discards unused layers)
     logger.info(f"Rank {rank}: Splitting model...")
     model_split = QwenSplitWrapper(transformer, rank, world_size)
    
     
-   # 3. Add LoRA adapters ONLY to the kept parts
+   # 3. Add LoRA adapters ONLY to the kept parts (ESTE ES EL NUEVO LoRA ENTRENABLE)
     logger.info(f"Rank {rank}: Adding LoRA adapters...")
     lora_config = LoraConfig(
         r=config.lora_rank,
