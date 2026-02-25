@@ -37,6 +37,7 @@ from torch.utils.data import Dataset, DataLoader
 from tqdm import tqdm
 from diffusers.optimization import get_scheduler
 from diffusers import FlowMatchEulerDiscreteScheduler, QwenImageTransformer2DModel
+from diffusers.models import AutoencoderKLQwenImage
 from peft import LoraConfig, get_peft_model
 from torch.distributed.pipelining import PipelineStage
 from torch.distributed.pipelining.schedules import Schedule1F1B
@@ -130,27 +131,24 @@ def collate_latents(batch):
         "prompt_embeds_mask": prompt_embeds_mask,
     }
 
-def init_distributed():        
-    """
-    modificar aquí para enviar primera mitad a GPU1 y segunda mitad a GPU0.
-    De esa forma, dejamos la GPU con más VRAM (GPU0) para la parte más pesada del modelo,
-    que es la que tiene las capas finales y el y el cálculo de la pérdida, así como 12GB de VRAM
-    libres para el VAE.    
-    """""
+def init_distributed():
     if "LOCAL_RANK" not in os.environ:
-        # Fallback for single node manual run without torchrun (debugging)
-        os.environ["LOCAL_RANK"] = "0"
-        os.environ["RANK"] = "0"
-        os.environ["WORLD_SIZE"] = "1"
+        os.environ["LOCAL_RANK"], os.environ["RANK"], os.environ["WORLD_SIZE"] = "0", "0", "1"
         
     rank = int(os.environ["RANK"])
     world_size = int(os.environ["WORLD_SIZE"])
     local_rank = int(os.environ["LOCAL_RANK"])
 
     if torch.cuda.is_available():
-        torch.cuda.set_device(local_rank)
-        device = torch.device(f"cuda:{local_rank}")
+        # LÓGICA DE INVERSIÓN:
+        # Rank 0 (Capas 1-20) -> GPU 1 (24GB)
+        # Rank 1 (Capas 21-40 + VAE) -> GPU 0 (32GB)
+        device_id = 1 if local_rank == 0 else 0
+        
+        torch.cuda.set_device(device_id)
+        device = torch.device(f"cuda:{device_id}")
         backend = "nccl"
+        logger.info(f"Rank {rank} mapeado a GPU {device_id}")
     else:
         device = torch.device("cpu")
         backend = "gloo"
@@ -158,7 +156,6 @@ def init_distributed():
     if not dist.is_initialized():
         dist.init_process_group(backend=backend)
         
-    # PP group is same as world for 2-GPU setup
     pp_group = dist.new_group() 
     return rank, world_size, device, pp_group
 
@@ -436,17 +433,20 @@ class QwenSplitWrapper(nn.Module):
             hidden_states = self.inner_model.proj_out(hidden_states)
 
            # FIX DEFINITIVO 2.0: Atar TODOS los inputs originales al grafo
-            # evitando que los tensores complejos contaminen el tipo de dato.
+            # evitando que los tensores complejos contaminen el tipo de dato y prevenir desbordamiento (overflow) a NaN en fp16.
             dummy_loss = torch.tensor(0.0, dtype=hidden_states.dtype, device=hidden_states.device)
             for inp in inputs:
                 if isinstance(inp, torch.Tensor) and inp.requires_grad:
-                    val = inp.sum()
+                    # 1. Pasamos a float32 y usamos mean() en lugar de sum() para no superar 65.504
+                    val = inp.mean()
                     # Si es un número complejo (rotary embeddings), nos quedamos solo con la parte real
                     if val.is_complex():
                         val = val.real
-                    
-                    dummy_loss = dummy_loss + val.to(hidden_states.dtype)
-            
+
+                    # 2. Multiplicamos por 0.0 AQUÍ (en float32 seguro) antes de pasarlo a float16
+                    dummy_loss = dummy_loss + (val * 0.0).to(hidden_states.dtype)
+
+            # Como dummy_loss ya es 0 puro, solo sumamos 0.0 * dummy_loss a hidden_states para mantener el grafo conectado sin afectar los valores ni causar overflow.
             hidden_states = hidden_states + 0.0 * dummy_loss
             
             # Return prediction only
@@ -454,6 +454,60 @@ class QwenSplitWrapper(nn.Module):
 
 def loss_fn(outputs, targets):
     return F.mse_loss(outputs.float(), targets.float(), reduction="mean")
+
+# Copied from diffusers.pipelines.qwenimage.pipeline_qwenimage.QwenImagePipeline._unpack_latents
+def unpack_latents(latents, height, width, vae_scale_factor):
+    batch_size, num_patches, channels = latents.shape
+
+    # VAE applies 8x compression on images but we must also account for packing which requires
+    # latent height and width to be divisible by 2.
+    height = 2 * (int(height) // (vae_scale_factor * 2))
+    width = 2 * (int(width) // (vae_scale_factor * 2))
+
+    latents = latents.view(batch_size, height // 2, width // 2, channels // 4, 2, 2)
+    latents = latents.permute(0, 3, 1, 4, 2, 5)
+
+    latents = latents.reshape(batch_size, channels // (2 * 2), 1, height, width)
+
+    return latents
+
+def make_image_space_loss_fn(vae, img_height=512, img_width=512):
+    def loss_fn(outputs, combined_target):
+        # 1. Desempaquetar el tensor combinado que PyTorch cortó en microbatches
+        noisy_core = combined_target[:, 0, :, :]
+        gt_latents_packed = combined_target[:, 1, :, :]
+        
+        # t_norm se expandió a [B, Seq, C], recuperamos su forma original [B, 1, 1]
+        t_norm = combined_target[:, 2, 0:1, 0:1] 
+        
+        v_pred = outputs
+        
+        # 2. Calcular x0 predicho matemáticamente
+        x0_pred = noisy_core - t_norm * v_pred
+        
+        # 3. Convertir de Secuencia a Espacial (Usa tu unpack_latents original aquí)
+        x0_pred_spatial = unpack_latents(x0_pred, img_height, img_width, vae_scale_factor=8)
+        gt_latents_spatial = unpack_latents(gt_latents_packed, img_height, img_width, vae_scale_factor=8)
+        
+        # 4. Normalización para Qwen
+        x0_pred_spatial = x0_pred_spatial.to(vae.dtype)
+        gt_latents_spatial = gt_latents_spatial.to(vae.dtype)
+        
+        latents_mean = torch.tensor(vae.config.latents_mean).view(1, vae.config.z_dim, 1, 1, 1).to(x0_pred_spatial.device, x0_pred_spatial.dtype)
+        latents_std = 1.0 / torch.tensor(vae.config.latents_std).view(1, vae.config.z_dim, 1, 1, 1).to(x0_pred_spatial.device, x0_pred_spatial.dtype)
+        
+        x0_pred_norm = x0_pred_spatial / latents_std + latents_mean
+        gt_latents_norm = gt_latents_spatial / latents_std + latents_mean
+        
+        # 5. Decodificar
+        pred_image = vae.decode(x0_pred_norm, return_dict=False)[0]
+        with torch.no_grad():
+            gt_image = vae.decode(gt_latents_norm, return_dict=False)[0]
+            
+        # 6. Calcular Loss Perceptual / MSE
+        return F.mse_loss(pred_image.float(), gt_image.float(), reduction="mean")
+        
+    return loss_fn
 
 def main():
     parser = argparse.ArgumentParser()
@@ -597,10 +651,36 @@ def main():
         device=device,
         group=pp_group,
     )
+   
+    # =================================================================
+    # AQUÍ CARGAMOS EL VAE (Justo antes de crear la Loss y el Schedule)
+    # =================================================================
+    vae = None
+    if rank == 1:
+        logger.info(f"Rank {rank}: Cargando VAE en GPU {device} para la loss perceptual...")
+        from diffusers import AutoencoderKL
+        vae = AutoencoderKLQwenImage.from_pretrained(
+            config.base_model, 
+            subfolder="vae", 
+            torch_dtype=dtype
+        ).to(device)
+        vae.requires_grad_(False)
+        vae.eval()
+
+        # Aquí crearíamos la nueva función de loss pasándole el VAE
+        loss_fn = make_image_space_loss_fn(vae, img_height=512, img_width=512)
+    else:
+        loss_fn = lambda x, y: torch.tensor(0.0, device=device, requires_grad=True) # Dummy loss for Rank 0, no se usa pero el Schedule lo requiere
+
     
-    # Schedule
+    # =================================================================
+
+    # Schedule (AQUÍ le pasamos la loss_fn que ya tiene el VAE por dentro)
     schedule = Schedule1F1B(stage, n_microbatches=config.microbatches, loss_fn=loss_fn)
     
+    g = torch.Generator()
+    g.manual_seed(42) # Seed global para reproducibilidad (aunque cada paso también tiene su propio seed)
+
     # Dataloader
     dataset = LatentsDataset(config.latents_dir)
     dataloader = DataLoader(
@@ -608,7 +688,8 @@ def main():
         batch_size=config.batch_size, 
         collate_fn=collate_latents, 
         drop_last=True, 
-        shuffle=True, # Shuffle global
+        shuffle=True, # Shuffle global,
+        generator=g,
         num_workers=4
     )
     
@@ -659,16 +740,17 @@ def main():
                 schedule.step(*inputs)
                 
             elif rank == 1:
-                # Target for loss (Will be chunked by Schedule1F1B internally? 
-                # Schedule1F1B usually doesn't chunk 'target' passed to step automatically? 
-                # Wait, step(target=...) passes target to loss_fn.
-                # Does loss_fn receive microbatch target or full target?
-                # It receives microbatch target.
-                # Does schedule chunk the target?
-                # Yes, if it detects target as tensor matching batch dim.
+                # --- NUEVO: Apilar datos en un único Tensor para Pipeline Parallelism ---
+                # Expandimos t_norm [B, 1, 1] para que encaje con [B, Seq, C]
+                t_norm_expanded = t_norm.expand_as(noisy_core)
                 
+                # Apilamos en la dimensión 1. Resultado: [B, 3, Seq, C]
+                # Índice 0: noisy_core
+                # Índice 1: target (GT)
+                # Índice 2: t_norm_expanded
+                combined_target = torch.stack([noisy_core, target, t_norm_expanded], dim=1)
                 losses = []
-                schedule.step(target=velocity_target, losses=losses)
+                schedule.step(target=combined_target, losses=losses)
                 
                 if len(losses) > 0:
                     step_loss = torch.mean(torch.stack(losses)).item()
