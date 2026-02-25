@@ -30,9 +30,12 @@ os.environ["TMPDIR"] = "/dev/shm"
 os.environ["PYTHONNOUSERSITE"] = "1"
 
 import torch
+import logging
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.distributed as dist
+import torchvision.transforms as T
+from PIL import Image
 from torch.utils.data import Dataset, DataLoader
 from tqdm import tqdm
 from diffusers.optimization import get_scheduler
@@ -42,7 +45,7 @@ from peft import LoraConfig, get_peft_model
 from torch.distributed.pipelining import PipelineStage
 from torch.distributed.pipelining.schedules import Schedule1F1B
 
-import logging
+
 logging.basicConfig(
     level=logging.INFO,
     force=True, 
@@ -80,6 +83,75 @@ class LatentsDataset(Dataset):
     def __getitem__(self, idx):
         path = self.files[idx]
         return torch.load(path, weights_only=True)
+    
+class ImageSpaceLoss:
+    def __init__(self, vae, img_height=512, img_width=512, save_dir="output_test_pp/images"):
+        self.vae = vae
+        self.img_height = img_height
+        self.img_width = img_width
+        self.save_dir = save_dir
+        self.step_counter = 0
+        
+        # Crear la carpeta si no existe
+        if self.save_dir is not None:
+            os.makedirs(self.save_dir, exist_ok=True)
+            
+    def __call__(self, outputs, combined_target):
+        # 1. Desempaquetar
+        noisy_core = combined_target[:, 0, :, :]
+        gt_latents_packed = combined_target[:, 1, :, :]
+        t_norm = combined_target[:, 2, 0:1, 0:1] 
+        v_pred = outputs
+        
+        # 2. Calcular x0 predicho matemáticamente
+        x0_pred = noisy_core - t_norm * v_pred
+        
+        # 3. Convertir de Secuencia a Espacial
+        x0_pred_spatial = unpack_latents(x0_pred, self.img_height, self.img_width, vae_scale_factor=8)
+        gt_latents_spatial = unpack_latents(gt_latents_packed, self.img_height, self.img_width, vae_scale_factor=8)
+        
+        # 4. Normalización de Qwen
+        x0_pred_spatial = x0_pred_spatial.to(self.vae.dtype)
+        gt_latents_spatial = gt_latents_spatial.to(self.vae.dtype)
+        
+        latents_mean = torch.tensor(self.vae.config.latents_mean).view(1, self.vae.config.z_dim, 1, 1, 1).to(x0_pred_spatial.device, x0_pred_spatial.dtype)
+        latents_std = 1.0 / torch.tensor(self.vae.config.latents_std).view(1, self.vae.config.z_dim, 1, 1, 1).to(x0_pred_spatial.device, x0_pred_spatial.dtype)
+        
+        x0_pred_norm = x0_pred_spatial / latents_std + latents_mean
+        gt_latents_norm = gt_latents_spatial / latents_std + latents_mean
+        
+        # 5. Decodificar
+        pred_image = self.vae.decode(x0_pred_norm, return_dict=False)[0][:, :, 0, :, :] # Eliminar la dimensión de frame que añadimos para VAE
+        with torch.no_grad():
+            gt_image = self.vae.decode(gt_latents_norm, return_dict=False)[0][:, :, 0]
+            
+        # 6. GUARDAR LA IMAGEN CADA 50 STEPS (Ajusta este número si quieres más/menos imágenes)
+        if self.save_dir is not None and self.step_counter % 50 == 0:
+            # Tomamos la primera imagen del batch
+            p_img = pred_image[0].detach().cpu().float()
+            g_img = gt_image[0].detach().cpu().float()
+            
+            # Normalizar tensores al rango correcto de color [0, 1]
+            p_img = torch.clamp((p_img / 2 + 0.5), 0, 1)
+            g_img = torch.clamp((g_img / 2 + 0.5), 0, 1)
+            
+            p_pil = T.ToPILImage()(p_img)
+            g_pil = T.ToPILImage()(g_img)
+            
+            # Crear una imagen combinada: Predicción (Izquierda) | Ground Truth (Derecha)
+            w, h = p_pil.size
+            combined = Image.new('RGB', (w * 2, h))
+            combined.paste(p_pil, (0, 0))
+            combined.paste(g_pil, (w, 0))
+            
+            # Guardar con formato step_0000.png, step_0050.png, etc.
+            filename = os.path.join(self.save_dir, f"step_{self.step_counter:04d}.png")
+            combined.save(filename)
+            
+        self.step_counter += 1
+            
+        # 7. Retornar la pérdida al Pipeline
+        return F.mse_loss(pred_image.float(), gt_image.float(), reduction="mean")
 
 def collate_latents(batch):
     target_latents = torch.cat([item["target_latents_packed"] for item in batch], dim=0)
@@ -662,13 +734,20 @@ def main():
         vae = AutoencoderKLQwenImage.from_pretrained(
             config.base_model, 
             subfolder="vae", 
-            torch_dtype=dtype
+            torch_dtype=dtype   # <--- FORZAMOS FP32 AQUÍ (actualmente está a float16 y la V100 no admite bfloat16)
         ).to(device)
         vae.requires_grad_(False)
         vae.eval()
 
         # Aquí crearíamos la nueva función de loss pasándole el VAE
-        loss_fn = make_image_space_loss_fn(vae, img_height=512, img_width=512)
+        # loss_fn = make_image_space_loss_fn(vae, img_height=512, img_width=512)
+        loss_fn = ImageSpaceLoss(
+            vae=vae,
+            img_height=512,
+            img_width=512, 
+            save_dir=os.path.join(config.output_dir, "predictions_rank1")
+
+        )
     else:
         loss_fn = lambda x, y: torch.tensor(0.0, device=device, requires_grad=True) # Dummy loss for Rank 0, no se usa pero el Schedule lo requiere
 
