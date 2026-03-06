@@ -3,7 +3,7 @@ Script de Fine-tuning con Pipeline Parallelism (2 GPUs) usando torch.distributed
 Basado en train_from_latents.py y dividiendo_por_capas_GPU.py.
 
 Usage:
-    torchrun --nproc_per_node=2 train_from_latents_pp.py --latents_dir path/to/latents ...
+    torchrun --nproc_per_node 2 /home/jupyter-antoniodetoro/nas/qwen/Qwen-Image-Edit-Angles-2/src/train_from_latents_pp_QLoRA.py   --latents_dir "/home/jupyter-antoniodetoro/nas/qwen/Qwen-Image-Edit-Angles-2/models/precomputed_latents_norm"   --output_dir "output_test_pp"   --batch_size 4   --microbatches 4   --epochs 200   --learning_rate 1e-5
 """
 
 import os
@@ -78,6 +78,17 @@ class LatentsDataset(Dataset):
         if len(self.files) == 0:
             logger.warning(f"No files found in {self.split_dir}")
 
+        # Compute the global max sequence length across ALL files so that every
+        # batch is padded to the same shape (required by PipelineStage shape validation).
+        logger.info(f"Scanning {len(self.files)} files to compute global_max_seq_len...")
+        self.global_max_seq_len = 0
+        for f in self.files:
+            data = torch.load(f, weights_only=True)
+            seq_len = data["prompt_embeds"].shape[1]
+            if seq_len > self.global_max_seq_len:
+                self.global_max_seq_len = seq_len
+        logger.info(f"global_max_seq_len = {self.global_max_seq_len}")
+
     def __len__(self):
         return len(self.files)
 
@@ -102,6 +113,8 @@ class ImageSpaceLoss:
         noisy_core = combined_target[:, 0, :, :].float()
         gt_latents_packed = combined_target[:, 1, :, :].float()
         t_norm = combined_target[:, 2, 0:1, 0:1].float()
+        # Canal 3: latentes de la imagen original (fuente)
+        src_latents_packed = combined_target[:, 3, :, :].float() if combined_target.shape[1] > 3 else None
         v_pred = outputs.float()
         
         # --- DIAGNÓSTICO: loguear dónde aparece NaN ---
@@ -148,25 +161,49 @@ class ImageSpaceLoss:
             
         # 6. GUARDAR LA IMAGEN CADA 50 STEPS (Ajusta este número si quieres más/menos imágenes)
         if self.save_dir is not None and self.step_counter % 50 == 0:
-            # Tomamos la primera imagen del batch
-            p_img = pred_image[0].detach().cpu().float()
-            g_img = gt_image[0].detach().cpu().float()
-            
-            # Normalizar tensores al rango correcto de color [0, 1]
-            p_img = torch.clamp((p_img / 2 + 0.5), 0, 1)
-            g_img = torch.clamp((g_img / 2 + 0.5), 0, 1)
+            # Seleccionar el sample con MENOR t_norm del batch para la visualización.
+            # Con t_norm alto (ruido máximo) x0_pred es básicamente ruido y no es informativo.
+            # Con t_norm bajo (poco ruido) x0_pred ≈ target → imagen realista y útil para seguir el entrenamiento.
+            t_norm_per_sample = t_norm[:, 0, 0]  # [B]
+            vis_idx = int(t_norm_per_sample.argmin().item())
+            vis_t = t_norm_per_sample[vis_idx].item()
+            logger.info(f"[VIS step {self.step_counter}] Guardando sample idx={vis_idx} con t_norm={vis_t:.3f}")
+
+            # Decodificar imagen fuente si está disponible
+            src_pil = None
+            if src_latents_packed is not None:
+                try:
+                    src_spatial = unpack_latents(src_latents_packed[[vis_idx]], self.img_height, self.img_width, vae_scale_factor=8)
+                    src_spatial = src_spatial.to(self.vae.dtype)
+                    src_norm = src_spatial / latents_std + latents_mean
+                    with torch.no_grad():
+                        src_image = self.vae.decode(src_norm, return_dict=False)[0][:, :, 0]
+                    s_img = torch.clamp((src_image[0].detach().cpu().float() / 2 + 0.5), 0, 1)
+                    src_pil = T.ToPILImage()(s_img)
+                except Exception as e:
+                    logger.warning(f"[LOSS step {self.step_counter}] Error decodificando imagen fuente: {e}")
+
+            # Tomamos el sample con menor t_norm
+            p_img = torch.clamp((pred_image[vis_idx].detach().cpu().float() / 2 + 0.5), 0, 1)
+            g_img = torch.clamp((gt_image[vis_idx].detach().cpu().float() / 2 + 0.5), 0, 1)
             
             p_pil = T.ToPILImage()(p_img)
             g_pil = T.ToPILImage()(g_img)
             
-            # Crear una imagen combinada: Predicción (Izquierda) | Ground Truth (Derecha)
+            # Crear imagen combinada: Original (Izq) | Predicción (Centro) | Ground Truth (Der)
             w, h = p_pil.size
-            combined = Image.new('RGB', (w * 2, h))
-            combined.paste(p_pil, (0, 0))
-            combined.paste(g_pil, (w, 0))
+            if src_pil is not None:
+                combined = Image.new('RGB', (w * 3, h))
+                combined.paste(src_pil, (0, 0))
+                combined.paste(p_pil, (w, 0))
+                combined.paste(g_pil, (w * 2, 0))
+            else:
+                combined = Image.new('RGB', (w * 2, h))
+                combined.paste(p_pil, (0, 0))
+                combined.paste(g_pil, (w, 0))
             
-            # Guardar con formato step_0000.png, step_0050.png, etc.
-            filename = os.path.join(self.save_dir, f"step_{self.step_counter:04d}.png")
+            # Guardar con formato step_0000.png (t=0.XYZ).png para saber el nivel de ruido
+            filename = os.path.join(self.save_dir, f"step_{self.step_counter:04d}_t{vis_t:.2f}.png")
             combined.save(filename)
             
         self.step_counter += 1
@@ -174,55 +211,63 @@ class ImageSpaceLoss:
         # 7. Retornar la pérdida al Pipeline
         return F.mse_loss(pred_image.float(), gt_image.float(), reduction="mean")
 
-def collate_latents(batch):
-    target_latents = torch.cat([item["target_latents_packed"] for item in batch], dim=0)
-    
-    # Prompt embeds have variable length! We need to pad them.
-    prompt_embeds_list = [item["prompt_embeds"] for item in batch]
-    prompt_masks_list = [item["prompt_embeds_mask"] for item in batch]
-    
-    # Check max length in this batch
-    max_len = max([pe.shape[1] for pe in prompt_embeds_list])
-    
-    padded_embeds = []
-    padded_masks = []
-    
-    for i, (pe, pm) in enumerate(zip(prompt_embeds_list, prompt_masks_list)):
-        # pe: [1, Seq, Dim]
-        curr_len = pe.shape[1]
-        
-        # Debugging: check mask sum
-        mask_sum = pm.sum()
-        if mask_sum == 0:
-            print(f"[COLLATE ERROR] Batch item {i}: prompt_embeds_mask sum is 0! Length {curr_len}")
-            
-        if curr_len < max_len:
-            pad_len = max_len - curr_len
-            # Pad embeds with zeros. F.pad tuple is (last_dim_left, last_dim_right, 2nd_last_left, 2nd_last_right...)
-            # pe shape [1, Seq, Dim]. We want to pad Seq (dimension 1).
-            # Last dim is Dim (index 2). No padding.
-            # 2nd last is Seq (index 1). Padding pad_len at right.
-            # 3rd last is Batch (index 0). No padding.
-            pe_pad = F.pad(pe, (0, 0, 0, pad_len), value=0)
-            
-            # pm shape [1, Seq]. 
-            # Last dim is Seq. Padding pad_len at right.
-            pm_pad = F.pad(pm, (0, pad_len), value=0)
-            
-            padded_embeds.append(pe_pad)
-            padded_masks.append(pm_pad)
-        else:
-            padded_embeds.append(pe)
-            padded_masks.append(pm)
-            
-    prompt_embeds = torch.cat(padded_embeds, dim=0)
-    prompt_embeds_mask = torch.cat(padded_masks, dim=0)
+def make_collate_latents(global_max_seq_len: int):
+    """Returns a collate_fn that always pads prompt_embeds to a fixed global length.
+    This is required because PipelineStage validates tensor shapes against the first
+    forward pass and crashes if subsequent batches have different sequence lengths."""
+    def collate_latents(batch):
+        target_latents = torch.cat([item["target_latents_packed"] for item in batch], dim=0)
+        # source_latents_packed es de tamaño fijo (igual que target), no necesita padding
+        source_latents = torch.cat([item["source_latents_packed"] for item in batch], dim=0)
 
-    return {
-        "target_latents_packed": target_latents,
-        "prompt_embeds": prompt_embeds,
-        "prompt_embeds_mask": prompt_embeds_mask,
-    }
+        # Prompt embeds have variable length — pad to the GLOBAL max so every batch
+        # produces tensors of identical shape.
+        prompt_embeds_list = [item["prompt_embeds"] for item in batch]
+        prompt_masks_list = [item["prompt_embeds_mask"] for item in batch]
+
+        max_len = global_max_seq_len
+
+        padded_embeds = []
+        padded_masks = []
+
+        for i, (pe, pm) in enumerate(zip(prompt_embeds_list, prompt_masks_list)):
+            # pe: [1, Seq, Dim]
+            curr_len = pe.shape[1]
+
+            # Debugging: check mask sum
+            mask_sum = pm.sum()
+            if mask_sum == 0:
+                print(f"[COLLATE ERROR] Batch item {i}: prompt_embeds_mask sum is 0! Length {curr_len}")
+
+            if curr_len < max_len:
+                pad_len = max_len - curr_len
+                # Pad embeds with zeros. F.pad tuple is (last_dim_left, last_dim_right, 2nd_last_left, 2nd_last_right...)
+                # pe shape [1, Seq, Dim]. We want to pad Seq (dimension 1).
+                # Last dim is Dim (index 2). No padding.
+                # 2nd last is Seq (index 1). Padding pad_len at right.
+                # 3rd last is Batch (index 0). No padding.
+                pe_pad = F.pad(pe, (0, 0, 0, pad_len), value=0)
+
+                # pm shape [1, Seq].
+                # Last dim is Seq. Padding pad_len at right.
+                pm_pad = F.pad(pm, (0, pad_len), value=0)
+
+                padded_embeds.append(pe_pad)
+                padded_masks.append(pm_pad)
+            else:
+                padded_embeds.append(pe)
+                padded_masks.append(pm)
+
+        prompt_embeds = torch.cat(padded_embeds, dim=0)
+        prompt_embeds_mask = torch.cat(padded_masks, dim=0)
+
+        return {
+            "target_latents_packed": target_latents,
+            "source_latents_packed": source_latents,
+            "prompt_embeds": prompt_embeds,
+            "prompt_embeds_mask": prompt_embeds_mask,
+        }
+    return collate_latents
 
 def init_distributed():
     rank = int(os.environ["RANK"])
@@ -758,7 +803,7 @@ def main():
     dataloader = DataLoader(
         dataset, 
         batch_size=config.batch_size, 
-        collate_fn=collate_latents, 
+        collate_fn=make_collate_latents(dataset.global_max_seq_len), 
         drop_last=True, 
         shuffle=True, # Shuffle global,
         generator=g,
@@ -814,7 +859,8 @@ def main():
                     
             elif rank == 1:
                 t_norm_expanded = t_norm.expand_as(noisy_core)
-                combined_target = torch.stack([noisy_core, target, t_norm_expanded], dim=1)
+                source = batch["source_latents_packed"].to(device, dtype=dtype)
+                combined_target = torch.stack([noisy_core, target, t_norm_expanded, source], dim=1)
                 losses = []
                 schedule.step(target=combined_target, losses=losses)
                 torch.nn.utils.clip_grad_norm_(model_split.parameters(), max_norm=1.0)
