@@ -1,7 +1,9 @@
 """
 Script de Fine-tuning con Pipeline Parallelism (2 GPUs) usando torch.distributed.pipelining.
 
-Fixes aplicados respecto a la versión anterior:
+VERSIÓN MODIFICADA CON HEATMAP LOSS DE HRNET
+
+Fixes aplicados respecto a la versión base:
   T1+T2  — Loss cambiada a MSE directo sobre velocity (v_pred vs velocity_target).
             Elimina el VAE del training loop → gradientes limpios y estables.
             velocity_target = noise - target se usa ahora correctamente.
@@ -17,18 +19,43 @@ Fixes aplicados respecto a la versión anterior:
   T8     — timestep dividido por 1000 antes del forward del transformer,
             igual que hace la pipeline original.
 
+NUEVAS MODIFICACIONES (HEATMAP LOSS):
+  H1     — Añadida arquitectura HRNet completa (PoseHRNet, Bottleneck, BasicBlock, etc.)
+  H2     — Nueva función preprocess_image_for_hrnet() con normalización ImageNet
+  H3     — Nueva función latents_to_images() para decodificar latentes a imágenes
+  H4     — Clase CombinedLossFn que reemplaza VelocityLossFn:
+            * Calcula x0_pred = noisy - t*v_pred (matemáticamente correcto)
+            * Decodifica x0_pred con VAE
+            * Calcula heatmaps con HRNet
+            * Compara con GT heatmaps
+            * Soporta dos tipos de loss: MSE simple y weighted MSE
+  H5     — Modificado collate_latents() para extraer target_heatmaps de los .pt
+  H6     — HRNet cargado en Rank 1 (mismo que VAE) y congelado
+  H7     — Modificado training loop para pasar timesteps a la loss
+  H8     — Añadidos argumentos CLI: --hrnet_model_path, --heatmap_loss_weight, etc.
+
 Usage:
-    torchrun --nproc_per_node 2 train_from_latents_pp_QLoRA.py \\
+    torchrun --nproc_per_node 2 train_from_latents_pp_QLoRA_HRNet.py \\
         --latents_dir "/ruta/precomputed_latents" \\
-        --output_dir "output_test_fix" \\
+        --hrnet_model_path "./models/pose_hrnet_w48_384x288.pth" \\
+        --output_dir "output_hrnet" \\
         --batch_size 4 \\
         --microbatches 4 \\
         --epochs 200 \\
-        --learning_rate 1e-4
+        --learning_rate 1e-4 \\
+        --heatmap_loss_weight 0.5 \\
+        --velocity_loss_weight 0.5 \\
+        --heatmap_loss_type "mse"
+
+
+        --------------------------------------------------------------------------------------------------------
+         torchrun --nproc_per_node 2 train_from_latents_pp_QLoRA_HRNet_Claude.py --latents_dir "/data/antoniodetoro/qwen/dataset_local_latents_512_heatmaps/" --hrnet_model_path /nas/antoniodetoro/qwen/Qwen-Image-Edit-Angles-2/src/hr_net/models/hrnet_finetuned_best.pth --output_dir output_qwen_HRNet --batch_size 4 --microbatches 4 --epochs 20 --heatmap_loss_weight 0.5 --velocity_loss_weight 0.5 --heatmap_loss_type "mse"
+
 """
 
 import os
-import sys,csv
+import sys
+import csv  # Ya estaba
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.dirname(current_dir)
@@ -37,7 +64,7 @@ sys.path.append(parent_dir)
 import argparse
 from pathlib import Path
 from dataclasses import dataclass
-from typing import List, Tuple
+from typing import List, Tuple, Optional  # MODIFICADO H1: añadido Optional
 from torch.utils.checkpoint import checkpoint
 
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
@@ -71,12 +98,334 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+# =========================================================================
+# NUEVO H1: ARQUITECTURA HRNET COMPLETA
+# Copiada del script hrnet_inference.py para cálculo de heatmaps
+# =========================================================================
+
+BN_MOMENTUM = 0.1
+
+
+class Bottleneck(nn.Module):
+    """Bloque Bottleneck para ResNet (usado en layer1 de HRNet)."""
+    expansion = 4
+
+    def __init__(self, inplanes, planes, stride=1, downsample=None):
+        super().__init__()
+        self.conv1 = nn.Conv2d(inplanes, planes, 1, bias=False)
+        self.bn1 = nn.BatchNorm2d(planes, momentum=BN_MOMENTUM)
+        self.conv2 = nn.Conv2d(planes, planes, 3, stride=stride, padding=1, bias=False)
+        self.bn2 = nn.BatchNorm2d(planes, momentum=BN_MOMENTUM)
+        self.conv3 = nn.Conv2d(planes, planes * self.expansion, 1, bias=False)
+        self.bn3 = nn.BatchNorm2d(planes * self.expansion, momentum=BN_MOMENTUM)
+        self.relu = nn.ReLU(inplace=True)
+        self.downsample = downsample
+
+    def forward(self, x):
+        residual = x
+        out = self.relu(self.bn1(self.conv1(x)))
+        out = self.relu(self.bn2(self.conv2(out)))
+        out = self.bn3(self.conv3(out))
+        if self.downsample is not None:
+            residual = self.downsample(x)
+        return self.relu(out + residual)
+
+
+class BasicBlock(nn.Module):
+    """Bloque básico para ResNet (usado en stages 2-4 de HRNet)."""
+    expansion = 1
+
+    def __init__(self, inplanes, planes, stride=1, downsample=None):
+        super().__init__()
+        self.conv1 = nn.Conv2d(inplanes, planes, 3, stride=stride, padding=1, bias=False)
+        self.bn1 = nn.BatchNorm2d(planes, momentum=BN_MOMENTUM)
+        self.conv2 = nn.Conv2d(planes, planes, 3, padding=1, bias=False)
+        self.bn2 = nn.BatchNorm2d(planes, momentum=BN_MOMENTUM)
+        self.relu = nn.ReLU(inplace=True)
+        self.downsample = downsample
+
+    def forward(self, x):
+        residual = x
+        out = self.relu(self.bn1(self.conv1(x)))
+        out = self.bn2(self.conv2(out))
+        if self.downsample is not None:
+            residual = self.downsample(x)
+        return self.relu(out + residual)
+
+
+class HighResolutionModule(nn.Module):
+    """Módulo multi-rama con fusión entre resoluciones."""
+
+    def __init__(self, num_branches, num_channels, num_blocks, multi_scale_output=True):
+        super().__init__()
+        self.num_branches = num_branches
+        self.num_channels = num_channels
+        self.multi_scale_output = multi_scale_output
+
+        self.branches = self._make_branches(num_branches, num_channels, num_blocks)
+        self.fuse_layers = self._make_fuse_layers()
+        self.relu = nn.ReLU(inplace=True)
+
+    def _make_one_branch(self, branch_idx, num_channels, num_blocks):
+        layers = []
+        for _ in range(num_blocks):
+            layers.append(BasicBlock(num_channels[branch_idx], num_channels[branch_idx]))
+        return nn.Sequential(*layers)
+
+    def _make_branches(self, num_branches, num_channels, num_blocks):
+        branches = []
+        for i in range(num_branches):
+            branches.append(self._make_one_branch(i, num_channels, num_blocks))
+        return nn.ModuleList(branches)
+
+    def _make_fuse_layers(self):
+        num_branches = self.num_branches
+        num_channels = self.num_channels
+        fuse_layers = []
+        for i in range(num_branches if self.multi_scale_output else 1):
+            fuse_layer = []
+            for j in range(num_branches):
+                if j > i:
+                    # Upsample: 1×1 conv + BN, luego interpolate en forward
+                    fuse_layer.append(nn.Sequential(
+                        nn.Conv2d(num_channels[j], num_channels[i], 1, bias=False),
+                        nn.BatchNorm2d(num_channels[i], momentum=BN_MOMENTUM),
+                    ))
+                elif j == i:
+                    fuse_layer.append(None)
+                else:
+                    # Downsample con stride-2 3×3 convs
+                    conv_downsamples = []
+                    for k in range(i - j):
+                        if k == i - j - 1:
+                            conv_downsamples.append(nn.Sequential(
+                                nn.Conv2d(num_channels[j], num_channels[i], 3, stride=2, padding=1, bias=False),
+                                nn.BatchNorm2d(num_channels[i], momentum=BN_MOMENTUM),
+                            ))
+                        else:
+                            conv_downsamples.append(nn.Sequential(
+                                nn.Conv2d(num_channels[j], num_channels[j], 3, stride=2, padding=1, bias=False),
+                                nn.BatchNorm2d(num_channels[j], momentum=BN_MOMENTUM),
+                                nn.ReLU(inplace=True),
+                            ))
+                    fuse_layer.append(nn.Sequential(*conv_downsamples))
+            fuse_layers.append(nn.ModuleList(fuse_layer))
+        return nn.ModuleList(fuse_layers)
+
+    def forward(self, x):
+        for i in range(self.num_branches):
+            x[i] = self.branches[i](x[i])
+
+        x_fuse = []
+        for i in range(len(self.fuse_layers)):
+            y = 0
+            for j in range(self.num_branches):
+                if i == j:
+                    y = y + x[j]
+                elif j > i:
+                    y = y + nn.functional.interpolate(
+                        self.fuse_layers[i][j](x[j]),
+                        size=x[i].shape[2:],
+                        mode='bilinear',
+                        align_corners=True
+                    )
+                else:
+                    y = y + self.fuse_layers[i][j](x[j])
+            x_fuse.append(self.relu(y))
+        return x_fuse
+
+
+class PoseHRNet(nn.Module):
+    """
+    HRNet para estimación de pose humana.
+    Configuración: W48 (COCO 17 keypoints).
+    """
+
+    def __init__(self, width=48, num_joints=17):
+        super().__init__()
+        C = width  # 48
+
+        # --- Stem ---
+        self.conv1 = nn.Conv2d(3, 64, 3, stride=2, padding=1, bias=False)
+        self.bn1 = nn.BatchNorm2d(64, momentum=BN_MOMENTUM)
+        self.conv2 = nn.Conv2d(64, 64, 3, stride=2, padding=1, bias=False)
+        self.bn2 = nn.BatchNorm2d(64, momentum=BN_MOMENTUM)
+        self.relu = nn.ReLU(inplace=True)
+
+        # --- Layer1: 4 Bottleneck blocks (64 → 256) ---
+        downsample = nn.Sequential(
+            nn.Conv2d(64, 256, 1, bias=False),
+            nn.BatchNorm2d(256, momentum=BN_MOMENTUM),
+        )
+        self.layer1 = nn.Sequential(
+            Bottleneck(64, 64, downsample=downsample),
+            Bottleneck(256, 64),
+            Bottleneck(256, 64),
+            Bottleneck(256, 64),
+        )
+
+        # --- Transition1: 256 → [C, 2C] ---
+        self.transition1 = nn.ModuleList([
+            nn.Sequential(
+                nn.Conv2d(256, C, 3, padding=1, bias=False),
+                nn.BatchNorm2d(C, momentum=BN_MOMENTUM),
+                nn.ReLU(inplace=True),
+            ),
+            nn.Sequential(nn.Sequential(
+                nn.Conv2d(256, C * 2, 3, stride=2, padding=1, bias=False),
+                nn.BatchNorm2d(C * 2, momentum=BN_MOMENTUM),
+                nn.ReLU(inplace=True),
+            )),
+        ])
+
+        # --- Stage2: 1 module, 2 branches ---
+        self.stage2 = nn.Sequential(
+            HighResolutionModule(2, [C, C * 2], num_blocks=4),
+        )
+
+        # --- Transition2: → [C, 2C, 4C] ---
+        self.transition2 = nn.ModuleList([
+            None,  # branch 0 keeps same
+            None,  # branch 1 keeps same
+            nn.Sequential(nn.Sequential(
+                nn.Conv2d(C * 2, C * 4, 3, stride=2, padding=1, bias=False),
+                nn.BatchNorm2d(C * 4, momentum=BN_MOMENTUM),
+                nn.ReLU(inplace=True),
+            )),
+        ])
+
+        # --- Stage3: 4 modules, 3 branches ---
+        stage3_modules = []
+        for i in range(4):
+            stage3_modules.append(
+                HighResolutionModule(3, [C, C * 2, C * 4], num_blocks=4,
+                                     multi_scale_output=True)
+            )
+        self.stage3 = nn.Sequential(*stage3_modules)
+
+        # --- Transition3: → [C, 2C, 4C, 8C] ---
+        self.transition3 = nn.ModuleList([
+            None,
+            None,
+            None,
+            nn.Sequential(nn.Sequential(
+                nn.Conv2d(C * 4, C * 8, 3, stride=2, padding=1, bias=False),
+                nn.BatchNorm2d(C * 8, momentum=BN_MOMENTUM),
+                nn.ReLU(inplace=True),
+            )),
+        ])
+
+        # --- Stage4: 3 modules, 4 branches ---
+        stage4_modules = []
+        for i in range(3):
+            multi_scale_output = True if i < 2 else False
+            stage4_modules.append(
+                HighResolutionModule(4, [C, C * 2, C * 4, C * 8], num_blocks=4,
+                                     multi_scale_output=multi_scale_output)
+            )
+        self.stage4 = nn.Sequential(*stage4_modules)
+
+        # --- Final layer ---
+        self.final_layer = nn.Conv2d(C, num_joints, 1)
+
+    def forward(self, x):
+        x = self.relu(self.bn1(self.conv1(x)))
+        x = self.relu(self.bn2(self.conv2(x)))
+        x = self.layer1(x)
+
+        # Transition1
+        x_list = []
+        for i in range(2):
+            x_list.append(self.transition1[i](x))
+
+        # Stage2
+        y_list = self.stage2[0](x_list)
+
+        # Transition2
+        x_list = []
+        for i in range(3):
+            if self.transition2[i] is not None:
+                x_list.append(self.transition2[i](y_list[-1]))
+            else:
+                x_list.append(y_list[i])
+
+        # Stage3
+        y_list = x_list
+        for module in self.stage3:
+            y_list = module(y_list)
+
+        # Transition3
+        x_list = []
+        for i in range(4):
+            if self.transition3[i] is not None:
+                x_list.append(self.transition3[i](y_list[-1]))
+            else:
+                x_list.append(y_list[i])
+
+        # Stage4
+        y_list = x_list
+        for module in self.stage4:
+            y_list = module(y_list)
+
+        # Output: highest resolution branch
+        x = self.final_layer(y_list[0])
+        return x
+
+
+def load_hrnet_model(
+    model_path: str,
+    width: int = 48,
+    num_joints: int = 17,
+    device: torch.device = torch.device('cpu')
+) -> PoseHRNet:
+    """
+    NUEVO H1: Carga HRNet pre-entrenado.
+    
+    Args:
+        model_path: Ruta al checkpoint .pth
+        width: Ancho del modelo (48 para W48)
+        num_joints: Número de keypoints (17 para COCO)
+        device: Device donde cargar
+    
+    Returns:
+        Modelo HRNet cargado y en eval mode
+    """
+    model = PoseHRNet(width=width, num_joints=num_joints)
+    
+    try:
+        # PyTorch >= 2.6 requiere weights_only=False para checkpoints de HRNet
+        checkpoint = torch.load(model_path, map_location=device, weights_only=False)
+    except TypeError:
+        # Compatibilidad con versiones antiguas
+        checkpoint = torch.load(model_path, map_location=device)
+    
+    if isinstance(checkpoint, dict) and 'state_dict' in checkpoint:
+        checkpoint = checkpoint['state_dict']
+    
+    model.load_state_dict(checkpoint, strict=True)
+    model.eval()
+    model.to(device)
+    
+    logger.info(f"✓ HRNet cargado desde {model_path}")
+    return model
+
+
+# =========================================================================
+# FIN ARQUITECTURA HRNET
+# =========================================================================
+
+
 @dataclass
 class TrainingConfig:
     latents_dir: str = "../models/precomputed_latents_fix"
     output_dir: str = "../models/finetuned_pp"
     base_model: str = "Qwen/Qwen-Image-Edit-2509"
     transformer_model: str = "../models/Qwen-Fused-Angles"
+    
+    # NUEVO H1: Configuración HRNet
+    hrnet_model_path: str = "./models/pose_hrnet_w48_384x288.pth"
+    hrnet_input_size: Tuple[int, int] = (288, 384)  # (H, W) para HRNet
+    
     epochs: int = 3
     batch_size: int = 4
     microbatches: int = 4
@@ -88,6 +437,11 @@ class TrainingConfig:
     inference_every: int = 10
     inference_steps: int = 4
     inference_samples: int = 2
+    
+    # NUEVO H1: Pesos de la loss combinada
+    velocity_loss_weight: float = 0.5  # alpha
+    heatmap_loss_weight: float = 0.5   # beta
+    heatmap_loss_type: str = "mse"     # "mse" o "weighted_mse"
 
 
 # ---------------------------------------------------------------------------
@@ -119,15 +473,28 @@ class LatentsDataset(Dataset):
 
 def make_collate_latents(global_max_seq_len: int):
     """
-    Collate que padea prompt_embeds a una longitud global fija.
-    PipelineStage valida shapes contra el primer forward; todos los batches deben
-    tener la misma forma.
+    MODIFICADO H5: Collate que padea prompt_embeds y EXTRAE target_heatmaps.
+    
+    CAMBIO: Ahora extrae target_heatmaps de los archivos .pt y los incluye
+    en el batch retornado.
     """
     def collate_latents(batch):
         target_latents  = torch.cat([item["target_latents_packed"]  for item in batch], dim=0)
         source_latents  = torch.cat([item["source_latents_packed"]  for item in batch], dim=0)
         prompt_list     = [item["prompt_embeds"]      for item in batch]
         mask_list       = [item["prompt_embeds_mask"] for item in batch]
+        
+        # NUEVO H5: Extraer heatmaps GT de los .pt
+        target_heatmaps_list = []
+        for item in batch:
+            if "target_heatmaps" in item:
+                target_heatmaps_list.append(item["target_heatmaps"])
+            else:
+                logger.warning("target_heatmaps no encontrado en batch item, usando ceros")
+                # Placeholder: (17, 72, 96) según shape confirmado
+                target_heatmaps_list.append(torch.zeros(17, 72, 96, dtype=torch.float32))
+        
+        target_heatmaps = torch.cat(target_heatmaps_list, dim=0)  # (B, 17, 72, 96)
 
         padded_embeds, padded_masks = [], []
         for pe, pm in zip(prompt_list, mask_list):
@@ -144,6 +511,7 @@ def make_collate_latents(global_max_seq_len: int):
             "source_latents_packed": source_latents,
             "prompt_embeds":         torch.cat(padded_embeds, dim=0),
             "prompt_embeds_mask":    torch.cat(padded_masks,  dim=0),
+            "target_heatmaps":       target_heatmaps,  # NUEVO H5
         }
     return collate_latents
 
@@ -198,34 +566,291 @@ def latents_to_pil(
     return pils
 
 
-# ---------------------------------------------------------------------------
-# Loss: velocity MSE (FIX T1 + T2)
-# ---------------------------------------------------------------------------
-
-def velocity_loss(v_pred: torch.Tensor, v_target: torch.Tensor) -> torch.Tensor:
+# NUEVO H3: Función para decodificar latentes a tensores de imágenes
+def latents_to_images(
+    latents_packed: torch.Tensor,
+    vae: AutoencoderKLQwenImage,
+    img_height: int,
+    img_width: int,
+) -> torch.Tensor:
     """
-    Loss de entrenamiento para flow matching.
-
-    FIX T1+T2: la versión anterior calculaba velocity_target pero nunca la usaba
-    y en su lugar hacía un MSE en espacio imagen a través del VAE, lo cual:
-      - introducía gradientes extremadamente ruidosos para t alto
-      - requería el VAE en GPU durante training (VRAM innecesaria)
-      - la desnormalización era incorrecta (FIX T3)
-
-    La loss correcta para flow matching es directamente:
-        L = MSE(v_pred, v_target)
-    donde v_target = noise - clean_latent.
-
-    Si se quiere loss en x0 (alternativa válida y equivalente):
-        x0_pred   = noisy - t * v_pred
-        L         = MSE(x0_pred, clean_latent)
-    Ambas son matemáticamente equivalentes salvo ponderación por t.
-    Usamos la versión de velocidad porque es más estable con t alto.
+    NUEVO H3: Desnormaliza + decodifica latentes empaquetados a tensor de imágenes.
+    
+    Args:
+        latents_packed: (B, Nv, 64) latentes empaquetados normalizados
+        vae: VAE decoder
+        img_height, img_width: resolución objetivo
+    
+    Returns:
+        Tensor (B, 3, H, W) en rango [-1, 1] (salida directa del VAE)
     """
-    # Recortar si el modelo devolvió tokens de condición adicionales
-    if v_pred.shape[1] > v_target.shape[1]:
-        v_pred = v_pred[:, :v_target.shape[1], :]
-    return F.mse_loss(v_pred.float(), v_target.float(), reduction="mean")
+    spatial = unpack_latents(latents_packed.float(), img_height, img_width).to(vae.dtype)
+
+    # Desnormalización: z_raw = z_norm * std + mean
+    vae_mean = torch.tensor(vae.config.latents_mean).view(
+        1, vae.config.z_dim, 1, 1, 1).to(spatial.device, spatial.dtype)
+    vae_std  = torch.tensor(vae.config.latents_std).view(
+        1, vae.config.z_dim, 1, 1, 1).to(spatial.device, spatial.dtype)
+    z_raw = spatial * vae_std + vae_mean
+
+    with torch.no_grad():
+        decoded = vae.decode(z_raw, return_dict=False)[0]  # (B, C, 1, H, W)
+    decoded = decoded[:, :, 0]  # (B, C, H, W)
+    
+    return decoded  # Ya está en rango [-1, 1]
+
+
+# NUEVO H2: Función de preprocesamiento para HRNet
+def preprocess_image_for_hrnet(
+    image: torch.Tensor,
+    target_size: Tuple[int, int] = (288, 384)
+) -> torch.Tensor:
+    """
+    NUEVO H2: Preprocesa imagen para HRNet con normalización ImageNet.
+    
+    Args:
+        image: Tensor (B, C, H, W) en rango [-1, 1] (salida del VAE)
+        target_size: (height, width) para HRNet (288, 384 para W48)
+    
+    Returns:
+        Tensor (B, C, H, W) normalizado para HRNet
+    """
+    # Paso 1: Convertir de [-1, 1] a [0, 1]
+    image = (image + 1.0) / 2.0
+    
+    # Paso 2: Resize a tamaño esperado por HRNet
+    image = F.interpolate(image, size=target_size, mode='bilinear', align_corners=True)
+    
+    # Paso 3: Normalización ImageNet (según script hrnet_inference.py)
+    mean = torch.tensor([0.485, 0.456, 0.406], device=image.device).view(1, 3, 1, 1)
+    std = torch.tensor([0.229, 0.224, 0.225], device=image.device).view(1, 3, 1, 1)
+    
+    image = (image - mean) / std
+    return image
+
+
+# ---------------------------------------------------------------------------
+# Loss: NUEVA clase CombinedLossFn (REEMPLAZA VelocityLossFn)
+# ---------------------------------------------------------------------------
+
+class CombinedLossFn:
+    """
+    NUEVO H4: Loss combinada que reemplaza VelocityLossFn.
+    
+    Calcula:
+        total_loss = alpha * velocity_loss + beta * heatmap_loss
+    
+    donde:
+        velocity_loss = MSE(v_pred, v_target)  [loss original]
+        heatmap_loss = MSE(HRNet(VAE(x0_pred)), target_heatmaps)  [nueva loss]
+    
+    Proceso:
+        1. Calcula velocity loss (igual que antes)
+        2. Reconstruye x0_pred = noisy - t * v_pred (matemáticamente correcto)
+        3. Decodifica x0_pred con VAE → imágenes
+        4. Preprocesa imágenes para HRNet
+        5. Calcula heatmaps con HRNet (congelado)
+        6. Compara con GT heatmaps (MSE o weighted MSE)
+        7. Combina ambas losses con pesos configurables
+    """
+
+    def __init__(
+        self,
+        vae: Optional[AutoencoderKLQwenImage] = None,
+        hrnet: Optional[PoseHRNet] = None,
+        hrnet_input_size: Tuple[int, int] = (288, 384),
+        img_height: int = 512,
+        img_width: int = 512,
+        velocity_weight: float = 0.5,
+        heatmap_weight: float = 0.5,
+        heatmap_loss_type: str = "mse",
+        save_dir: str = None
+    ):
+        """
+        Args:
+            vae: VAE decoder (solo en Rank 1)
+            hrnet: HRNet modelo (solo en Rank 1, congelado)
+            hrnet_input_size: (H, W) input size para HRNet
+            img_height, img_width: Resolución de las imágenes del dataset
+            velocity_weight: Peso alpha para velocity loss
+            heatmap_weight: Peso beta para heatmap loss
+            heatmap_loss_type: "mse" o "weighted_mse"
+            save_dir: Directorio para guardar diagnósticos (opcional)
+        """
+        self.vae = vae
+        self.hrnet = hrnet
+        self.hrnet_input_size = hrnet_input_size
+        self.img_height = img_height
+        self.img_width = img_width
+        self.velocity_weight = velocity_weight
+        self.heatmap_weight = heatmap_weight
+        self.heatmap_loss_type = heatmap_loss_type
+        
+        self.save_dir = save_dir
+        self.step_counter = 0
+        if save_dir is not None:
+            os.makedirs(save_dir, exist_ok=True)
+        
+        # Storage para heatmaps GT y timesteps (se actualizan desde fuera)
+        self.current_target_heatmaps = None
+        self.current_timesteps = None
+        
+        # NUEVO H4: Pesos para weighted MSE (prioriza joints centrales del cuerpo)
+        # COCO keypoints: [nose, l_eye, r_eye, l_ear, r_ear, l_shoulder, r_shoulder, 
+        #                  l_elbow, r_elbow, l_wrist, r_wrist, l_hip, r_hip, 
+        #                  l_knee, r_knee, l_ankle, r_ankle]
+        self.keypoint_weights = torch.tensor([
+            1.0,  # nose
+            0.8, 0.8,  # eyes
+            0.6, 0.6,  # ears
+            1.5, 1.5,  # shoulders (más importantes para estructura corporal)
+            1.2, 1.2,  # elbows
+            1.0, 1.0,  # wrists
+            1.5, 1.5,  # hips (más importantes para estructura corporal)
+            1.2, 1.2,  # knees
+            1.0, 1.0,  # ankles
+        ], dtype=torch.float32)
+
+    def set_batch_context(self, target_heatmaps: torch.Tensor, timesteps: torch.Tensor):
+        """
+        NUEVO H4: Actualiza contexto del batch actual.
+        Debe llamarse antes de cada schedule.step() en el training loop.
+        
+        Args:
+            target_heatmaps: (B, 17, 72, 96) heatmaps GT del batch
+            timesteps: (B,) timesteps del batch para reconstruir x0
+        """
+        self.current_target_heatmaps = target_heatmaps
+        self.current_timesteps = timesteps
+
+    def __call__(self, outputs: torch.Tensor, combined_target: torch.Tensor) -> torch.Tensor:
+        """
+        Calcula loss combinada.
+        
+        Args:
+            outputs: v_pred del modelo (B, Seq, C)
+            combined_target: (B, 2, Seq, C) con [v_target, noisy_core]
+        
+        Returns:
+            loss total ponderada
+        """
+        device = outputs.device
+        
+        # ──────────────────────────────────────────────────────────────────
+        # 1. VELOCITY LOSS (loss original, sin cambios)
+        # ──────────────────────────────────────────────────────────────────
+        v_target = combined_target[:, 0, :, :].float()  # (B, Seq, C)
+        v_pred = outputs.float()
+        
+        # Recortar tokens de condición si el modelo los devuelve
+        if v_pred.shape[1] > v_target.shape[1]:
+            v_pred = v_pred[:, :v_target.shape[1], :]
+
+        # Validación de NaN/Inf
+        if torch.isnan(v_pred).any() or torch.isinf(v_pred).any():
+            logger.warning(
+                f"[LOSS step {self.step_counter}] NaN/Inf en v_pred. "
+                f"max={v_pred.abs().nanmax().item():.2f}"
+            )
+            self.step_counter += 1
+            return torch.tensor(0.0, device=device, requires_grad=True)
+
+        velocity_loss_val = F.mse_loss(v_pred, v_target, reduction="mean")
+        
+        # ──────────────────────────────────────────────────────────────────
+        # 2. HEATMAP LOSS (NUEVA)
+        # ──────────────────────────────────────────────────────────────────
+        heatmap_loss_val = torch.tensor(0.0, device=device)
+        
+        if (self.vae is not None and 
+            self.hrnet is not None and 
+            self.current_target_heatmaps is not None and
+            self.current_timesteps is not None):
+            
+            try:
+                # NUEVO H4a: Reconstruir x0_pred desde velocity (matemáticamente correcto)
+                noisy_latents = combined_target[:, 1, :, :]  # (B, Seq, C)
+                
+                # Normalizar timesteps a [0, 1]
+                # Los timesteps vienen como enteros [0, num_train_timesteps]
+                # Asumiendo num_train_timesteps = 1000 (estándar en flow matching)
+                t_normalized = self.current_timesteps.float() / 1000.0
+                t_normalized = t_normalized.view(-1, 1, 1).to(v_pred.dtype)
+                
+                # x0_pred = noisy - t * v_pred
+                # Esta es la imagen limpia predicha por el modelo
+                x0_pred = noisy_latents - t_normalized * v_pred  # (B, Seq, C)
+                
+                # NUEVO H4b: Decodificar x0_pred a imágenes
+                decoded_images = latents_to_images(
+                    x0_pred,
+                    self.vae,
+                    self.img_height,
+                    self.img_width
+                )  # (B, 3, H, W) en [-1, 1]
+                
+                # NUEVO H4c: Preprocesar para HRNet (normalización ImageNet)
+                hrnet_input = preprocess_image_for_hrnet(
+                    decoded_images,
+                    self.hrnet_input_size
+                )  # (B, 3, 288, 384) normalizado
+                
+                # NUEVO H4d: Forward HRNet (congelado, sin gradientes)
+                with torch.no_grad():
+                    pred_heatmaps = self.hrnet(hrnet_input)  # (B, 17, 72, 96)
+                
+                # NUEVO H4e: Preparar GT heatmaps
+                target_hm = self.current_target_heatmaps.to(device).float()
+                
+                # Verificar shapes y hacer resize si es necesario
+                # (Deben ser (B, 17, 72, 96) ambos)
+                if target_hm.shape[-2:] != pred_heatmaps.shape[-2:]:
+                    target_hm = F.interpolate(
+                        target_hm,
+                        size=pred_heatmaps.shape[-2:],
+                        mode='bilinear',
+                        align_corners=True
+                    )
+                
+                # NUEVO H4f: Calcular loss según tipo
+                if self.heatmap_loss_type == "weighted_mse":
+                    # Weighted MSE: dar más peso a joints importantes
+                    weights = self.keypoint_weights.to(device).view(1, 17, 1, 1)
+                    diff = (pred_heatmaps - target_hm) ** 2
+                    heatmap_loss_val = (weights * diff).mean()
+                else:  # "mse" (default)
+                    heatmap_loss_val = F.mse_loss(
+                        pred_heatmaps,
+                        target_hm,
+                        reduction="mean"
+                    )
+                
+            except Exception as e:
+                logger.warning(f"[LOSS step {self.step_counter}] Error en heatmap loss: {e}")
+                import traceback
+                traceback.print_exc()
+                heatmap_loss_val = torch.tensor(0.0, device=device)
+        
+        # ──────────────────────────────────────────────────────────────────
+        # 3. LOSS COMBINADA PONDERADA
+        # ──────────────────────────────────────────────────────────────────
+        total_loss = (
+            self.velocity_weight * velocity_loss_val +
+            self.heatmap_weight * heatmap_loss_val
+        )
+        
+        # Logging cada 50 pasos
+        if self.step_counter % 50 == 0:
+            logger.info(
+                f"[LOSS step {self.step_counter}] "
+                f"Velocity: {velocity_loss_val.item():.6f}, "
+                f"Heatmap: {heatmap_loss_val.item():.6f}, "
+                f"Total: {total_loss.item():.6f} "
+                f"(α={self.velocity_weight:.2f}, β={self.heatmap_weight:.2f})"
+            )
+        
+        self.step_counter += 1
+        return total_loss
 
 
 # ---------------------------------------------------------------------------
@@ -413,10 +1038,10 @@ class QwenSplitWrapper(nn.Module):
             # La máscara es int/bool; la casteamos a float para que PipelineStage
             # pueda manejar el tensor como activación flotante.
             mask_float = encoder_hidden_states_mask.to(dtype=hidden_states.dtype)
-            return (hidden_states, encoder_hidden_states, mask_float, temb, r0.real.contiguous(), r0.imag.contiguous(), r1.real.contiguous(), r1.imag.contiguous())   #aqui hay cambio en los complejos de r
+            return (hidden_states, encoder_hidden_states, mask_float, temb, r0.real.contiguous(), r0.imag.contiguous(), r1.real.contiguous(), r1.imag.contiguous())
 
         elif self.rank == 1:
-            hidden_states, encoder_hidden_states, mask_float, temb, r0_real, r0_imag, r1_real, r1_imag = inputs   #aqui hay cambio en los complejos de r al recibirlos
+            hidden_states, encoder_hidden_states, mask_float, temb, r0_real, r0_imag, r1_real, r1_imag = inputs
             encoder_hidden_states_mask = mask_float.to(torch.int64)
             r0 = torch.complex(r0_real, r0_imag)
             r1 = torch.complex(r1_real, r1_imag)
@@ -455,52 +1080,6 @@ class QwenSplitWrapper(nn.Module):
             hidden_states = hidden_states + anchor.to(hidden_states.dtype)
 
             return hidden_states
-
-
-# ---------------------------------------------------------------------------
-# Loss wrapper para Schedule1F1B
-# ---------------------------------------------------------------------------
-
-class VelocityLossFn:
-    """
-    Loss de velocidad para flow matching, compatible con Schedule1F1B.
-
-    FIX T1+T2: schedule.step recibe target = torch.stack([v_target, ...], dim=1)
-    y la loss desempaqueta v_target para comparar con v_pred.
-    Eliminamos el VAE del loop de training completamente.
-
-    El target combinado tiene forma (B, 2, Seq, C):
-        canal 0: v_target (velocity target = noise - clean_latent)
-        canal 1: noisy_core  (solo para logging/diagnóstico, no para la loss)
-    """
-
-    def __init__(self, save_dir: str = None):
-        self.save_dir     = save_dir
-        self.step_counter = 0
-        if save_dir is not None:
-            os.makedirs(save_dir, exist_ok=True)
-
-    def __call__(self, outputs: torch.Tensor, combined_target: torch.Tensor) -> torch.Tensor:
-        # combined_target: (B, 2, Seq, C)
-        v_target   = combined_target[:, 0, :, :].float()   # velocity target
-        # noisy_core = combined_target[:, 1, :, :]  # disponible para diagnóstico
-
-        v_pred = outputs.float()
-        # Recortar tokens de condición si el modelo los devuelve
-        if v_pred.shape[1] > v_target.shape[1]:
-            v_pred = v_pred[:, :v_target.shape[1], :]
-
-        if torch.isnan(v_pred).any() or torch.isinf(v_pred).any():
-            logger.warning(
-                f"[LOSS step {self.step_counter}] NaN/Inf en v_pred. "
-                f"max={v_pred.abs().nanmax().item():.2f}"
-            )
-            self.step_counter += 1
-            return torch.tensor(0.0, device=outputs.device, requires_grad=True)
-
-        loss = F.mse_loss(v_pred, v_target, reduction="mean")
-        self.step_counter += 1
-        return loss
 
 
 # ---------------------------------------------------------------------------
@@ -696,6 +1275,18 @@ def main():
     parser.add_argument("--output_dir",        type=str, default="../models/finetuned_pp")
     parser.add_argument("--base_model",        type=str, default="Qwen/Qwen-Image-Edit-2509")
     parser.add_argument("--transformer_model", type=str, default="../models/Qwen-Fused-Angles")
+    
+    # NUEVO H8: Argumentos para HRNet
+    parser.add_argument("--hrnet_model_path",  type=str, default="./models/pose_hrnet_w48_384x288.pth",
+                       help="Ruta al modelo HRNet pre-entrenado")
+    parser.add_argument("--heatmap_loss_weight", type=float, default=0.5,
+                       help="Peso beta de la heatmap loss (0.0-1.0)")
+    parser.add_argument("--velocity_loss_weight", type=float, default=0.5,
+                       help="Peso alpha de la velocity loss (0.0-1.0)")
+    parser.add_argument("--heatmap_loss_type", type=str, default="mse",
+                       choices=["mse", "weighted_mse"],
+                       help="Tipo de loss para heatmaps: mse (simple) o weighted_mse (pondera joints)")
+    
     parser.add_argument("--epochs",            type=int, default=3)
     parser.add_argument("--batch_size",        type=int, default=4)
     parser.add_argument("--microbatches",      type=int, default=4)
@@ -713,6 +1304,13 @@ def main():
         output_dir=args.output_dir,
         transformer_model=args.transformer_model,
         base_model=args.base_model,
+        
+        # NUEVO H8: Configuración HRNet
+        hrnet_model_path=args.hrnet_model_path,
+        velocity_loss_weight=args.velocity_loss_weight,
+        heatmap_loss_weight=args.heatmap_loss_weight,
+        heatmap_loss_type=args.heatmap_loss_type,
+        
         epochs=args.epochs,
         batch_size=args.batch_size,
         microbatches=args.microbatches,
@@ -735,6 +1333,10 @@ def main():
 
     if rank == 0:
         logger.info(f"Training: {world_size} GPUs, BS={config.batch_size}, micro={config.microbatches}")
+        # NUEVO H8: Logging de configuración HRNet
+        logger.info(f"Heatmap Loss Weight: {config.heatmap_loss_weight}")
+        logger.info(f"Velocity Loss Weight: {config.velocity_loss_weight}")
+        logger.info(f"Heatmap Loss Type: {config.heatmap_loss_type}")
         os.makedirs(config.output_dir, exist_ok=True)
 
     # ── 1. Quantization config ───────────────────────────────────────────────
@@ -799,48 +1401,6 @@ def main():
         config.base_model, subfolder="scheduler"
     )
 
-    # # ── 8. Pipeline stage (Adelantado para obtener el batch de muestra) ────────────────────────────────────────────────────
-    # logger.info(f"Rank {rank}: init PipelineStage...")
-    # stage = PipelineStage(
-    #     model_split,
-    #     stage_index=rank,
-    #     num_stages=world_size,
-    #     device=device,
-    #     group=pp_group,
-    # )
-
-    # # ── 9. VAE solo en rank 1 (para inferencia/visualización) ────────────────
-    # vae = None
-    # if rank == 1:
-    #     logger.info(f"Rank {rank}: cargando VAE en {device}...")
-    #     vae = AutoencoderKLQwenImage.from_pretrained(
-    #         config.base_model, subfolder="vae", torch_dtype=torch.float32
-    #     ).to(device)
-    #     vae.requires_grad_(False)
-    #     vae.eval()
-
-    # # ── 10. FIX T1+T2: Loss de velocidad, sin VAE en el loop de training ─────
-    # loss_fn_train = VelocityLossFn(
-    #     save_dir=os.path.join(config.output_dir, "loss_diagnostics_rank1") if rank == 1 else None
-    # ) if rank == 1 else (lambda x, y: torch.tensor(0.0, device=device, requires_grad=True))
-
-    # schedule = Schedule1F1B(stage, n_microbatches=config.microbatches, loss_fn=loss_fn_train)
-
-    # # ── 11. Dataloader ────────────────────────────────────────────────────────
-    # g = torch.Generator()
-    # g.manual_seed(42)
-
-    # dataset = LatentsDataset(config.latents_dir)
-    # dataloader = DataLoader(
-    #     dataset,
-    #     batch_size=config.batch_size,
-    #     collate_fn=make_collate_latents(dataset.global_max_seq_len),
-    #     drop_last=True,
-    #     shuffle=True,
-    #     generator=g,
-    #     num_workers=4,
-    # )
-
     # ── 8. Dataloader (Adelantado para obtener el batch de muestra) ───────────
     g = torch.Generator()
     g.manual_seed(42)
@@ -856,8 +1416,10 @@ def main():
         num_workers=4,
     )
 
-    # ── 9. VAE solo en rank 1 (para inferencia/visualización) ────────────────
+    # ── 9. VAE y HRNet solo en rank 1 ────────────────────────────────────────
     vae = None
+    hrnet = None  # NUEVO H6
+    
     if rank == 1:
         logger.info(f"Rank {rank}: cargando VAE en {device}...")
         vae = AutoencoderKLQwenImage.from_pretrained(
@@ -865,6 +1427,24 @@ def main():
         ).to(device)
         vae.requires_grad_(False)
         vae.eval()
+        
+        # NUEVO H6: Cargar HRNet en Rank 1 (mismo que VAE)
+        if os.path.exists(config.hrnet_model_path):
+            logger.info(f"Rank {rank}: cargando HRNet desde {config.hrnet_model_path}...")
+            hrnet = load_hrnet_model(
+                config.hrnet_model_path,
+                width=48,
+                num_joints=17,
+                device=device
+            )
+            hrnet.requires_grad_(False)  # Congelar HRNet
+            hrnet.eval()
+            logger.info(f"Rank {rank}: HRNet cargado y congelado correctamente")
+        else:
+            logger.warning(
+                f"Rank {rank}: HRNet no encontrado en {config.hrnet_model_path}, "
+                f"solo se usará velocity loss"
+            )
 
     # ── 10. Generar input_args (DRY-RUN) para PipelineStage ──────────────────
     logger.info(f"Rank {rank}: Generando dummy input_args para PipelineStage...")
@@ -913,17 +1493,26 @@ def main():
         group=pp_group,
     )
 
-    # ── 12. Loss wrapper para Schedule1F1B ─────
-    loss_fn_train = VelocityLossFn(
-        save_dir=os.path.join(config.output_dir, "loss_diagnostics_rank1") if rank == 1 else None
-    ) if rank == 1 else (lambda x, y: torch.tensor(0.0, device=device, requires_grad=True))
-
-    schedule = Schedule1F1B(stage, n_microbatches=config.microbatches, loss_fn=loss_fn_train)
-
+    # ── 12. NUEVA Loss combinada (REEMPLAZA VelocityLossFn) ──────────────────
+    # CAMBIO H4: Ahora usamos CombinedLossFn en lugar de VelocityLossFn
     # Inferir resolución desde el primer archivo del dataset
     first_sample = torch.load(dataset.files[0], weights_only=True)
     img_resolution = first_sample.get("resolution", 1024)
     logger.info(f"Resolución inferida del dataset: {img_resolution}")
+    
+    loss_fn_train = CombinedLossFn(
+        vae=vae,
+        hrnet=hrnet,
+        hrnet_input_size=config.hrnet_input_size,
+        img_height=img_resolution,
+        img_width=img_resolution,
+        velocity_weight=config.velocity_loss_weight,
+        heatmap_weight=config.heatmap_loss_weight,
+        heatmap_loss_type=config.heatmap_loss_type,
+        save_dir=os.path.join(config.output_dir, "loss_diagnostics") if rank == 1 else None
+    ) if rank == 1 else (lambda x, y: torch.tensor(0.0, device=device, requires_grad=True))
+
+    schedule = Schedule1F1B(stage, n_microbatches=config.microbatches, loss_fn=loss_fn_train)
 
     logger.info(f"Rank {rank}: listo para entrenar.")
     model_split.train()
@@ -953,6 +1542,9 @@ def main():
             target = batch["target_latents_packed"].to(device, dtype=dtype)  # (B, Nv, 64)
             prompt = batch["prompt_embeds"].to(device, dtype=dtype)           # (B, S, 3584)
             mask   = batch["prompt_embeds_mask"].to(device)                   # (B, S)
+            
+            # NUEVO H7: Extraer target_heatmaps del batch
+            target_heatmaps = batch["target_heatmaps"]  # (B, 17, 72, 96) en CPU inicialmente
 
             bsz = target.shape[0]
 
@@ -990,8 +1582,16 @@ def main():
                 optimizer.step()
 
             elif rank == 1:
+                # NUEVO H7: Pasar contexto del batch a la loss function
+                # Esto permite que la loss acceda a target_heatmaps y timesteps
+                if isinstance(loss_fn_train, CombinedLossFn):
+                    loss_fn_train.set_batch_context(
+                        target_heatmaps=target_heatmaps,
+                        timesteps=timesteps
+                    )
+                
                 # FIX T1+T2: combined_target contiene v_target en canal 0
-                # y noisy en canal 1 (solo para diagnóstico).
+                # y noisy en canal 1 (para reconstruir x0_pred).
                 combined_target = torch.stack([velocity_target, noisy], dim=1)
                 losses = []
                 schedule.step(target=combined_target, losses=losses)
@@ -1020,7 +1620,7 @@ def main():
             # ── NUEVO: Escribir métricas de la época en el CSV ───────────────
             with open(csv_file_path, mode="a", newline="") as f:
                 writer = csv.writer(f)
-                # Si añades validación en el futuro, cambia el "None" por la variable de val_loss
+                # Si añades validación en el futuro, cambia el "" por la variable de val_loss
                 writer.writerow([epoch, global_avg_loss, ""])
 
                 

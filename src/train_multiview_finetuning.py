@@ -32,6 +32,7 @@ import os
 import sys
 import json
 import argparse
+import bitsandbytes as bnb
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional
 from dataclasses import dataclass
@@ -634,7 +635,8 @@ def main():
     pipeline.text_encoder.requires_grad_(False)
     
     # Setup optimizer
-    optimizer = torch.optim.AdamW(
+   
+    optimizer = bnb.optim.AdamW8bit(
         pipeline.transformer.parameters(),
         lr=config.learning_rate,
         betas=(0.9, 0.999),

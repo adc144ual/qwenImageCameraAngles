@@ -26,8 +26,11 @@ TRANSFORMER_MODEL = "linoyts/Qwen-Image-Edit-Rapid-AIO"
 LORA_REPO = "dx8152/Qwen-Edit-2509-Multiple-angles"
 LORA_WEIGHTS = "镜头转换.safetensors"
 
+STEPS = 24
+PORCENTAJE = 70
+
 input_image_path = "../datos/MultiViewVisibleThermalImagesHPE/test/00_17/00_17_1680259607344_rgb.png"
-output_image_path = "../datos/background_15/prueba2.png"
+output_image_path = f"../datos/background_15/prueba_mezcla_{STEPS}_steps_{PORCENTAJE}.png"
 
 
 # A. Cargar la Imagen de Fondo Vacío (Target Background)
@@ -98,12 +101,13 @@ try:
                 prompt=prompt,
                 background_image=bg_image,
                 mask_image=mask_image,
-                num_inference_steps=6, 
+                num_inference_steps=STEPS, 
                 true_cfg_scale=1.0,
                 height = 512, # Especificando el tamaño de salida para menor cómputo
                 width = 512,  # Especificando el tamaño de salida para menor cómputo
                 num_images_per_prompt = 3,
                 generator=torch.Generator(device="cuda").manual_seed(42),
+                mask_blend_ratio=PORCENTAJE/10,  # 70% con máscara, 30% libre para transición suave
             ).images[0]
         return result
 
