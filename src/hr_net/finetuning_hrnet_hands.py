@@ -1,26 +1,67 @@
-import numpy as np
-import pandas as pd
-import cv2
-import torch
-import argparse
-from pathlib import Path
-from tqdm import tqdm
-import sys
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+"""
+HRNet Fine-Tuning Script - 23 Keypoints (17 body + 6 hands)
+==========================================================
+Descripción:
+    Script para re-entrenar (fine-tune) el modelo HRNet extendiendo
+    de 17 a 23 keypoints, añadiendo puntos de manos sin perder
+    conocimiento previo (evitando catastrophic forgetting).
 
 
+Ejecución:
+python finetuning_hrnet_hands.py --imgs-dir /nas/antoniodetoro/datasets/qwen/hr_net_with_hands/images
+ --heatmaps-dir /nas/antoniodetoro/datasets/qwen/hr_net_with_hands/heatmaps/ 
+ --model-path /nas/antoniodetoro/qwen/Qwen-Image-Edit-Angles-2/src/models/pose_hrnet_w48_384x288.pth 
+ --output-model /nas/antoniodetoro/qwen/Qwen-Image-Edit-Angles-2/src/hr_net/outputs/2/hr_net_23kp_best.pth  
+ --output-stats /nas/antoniodetoro/qwen/Qwen-Image-Edit-Angles-2/src/hr_net/outputs/2/training_stats.csv --epochs 100
+ --lr-backbone 1e-5 --lr-head 1e-3  --alpha 3.0 --early-stopping 15 --freeze-until stage4  --augment  --num-brightness-augs 1 
+ --gpus 1  --batch-size 128 --data-subset 1.0
 
+Características:
+    - Carga pesos preentrenados (17 kp) y extiende a 23
+    - Congelación parcial del backbone
+    - Loss ponderada (body vs hands)
+    - LR diferenciados por capas
+    - Augmentación: iluminación + flip horizontal
+    - Métricas completas: train/val/test loss + accuracy
+    - Notificaciones Telegram cuando mejora val_loss
+    - Subsampling de datos para pruebas rápidas
+"""
 
 import os
+import argparse
+import csv
+import logging
+import re
+from pathlib import Path
+from typing import Optional
+
+import cv2
+import numpy as np
+import torch
+import torch.nn as nn
+from torch.utils.data import Dataset, DataLoader, random_split, Subset
+from tqdm import tqdm
 from dotenv import load_dotenv
 import urllib.request
 import urllib.parse
 import json
-import logging
-from typing import Optional
 
-log = logging.getLogger(__name__)
+# Importar arquitectura HRNet
+try:
+    from hrnet_inference import PoseHRNet
+except ImportError:
+    raise ImportError("No se pudo importar 'PoseHRNet'. Asegúrate de que el script original se llama 'hrnet_inference.py' y está en esta misma carpeta.")
 
-# --- Telegram Notifier ---
+# Configuración de logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# TELEGRAM NOTIFIER
+# ══════════════════════════════════════════════════════════════════════════════
 def send_telegram(
     message: str,
     token: Optional[str] = None,
@@ -48,589 +89,1021 @@ def send_telegram(
         with urllib.request.urlopen(req, timeout=10) as resp:
             result = json.loads(resp.read().decode())
             if not result.get("ok"):
-                log.warning(f"[TELEGRAM] ✗ API respondió ok=false: {result}")
+                logger.warning(f"[TELEGRAM] ✗ API respondió ok=false: {result}")
                 print(f"[TELEGRAM] ✗ Fallo al enviar: {_preview!r}")
                 return False
-        log.info(f"[TELEGRAM] ✓ Enviado: {_preview!r}")
+        logger.info(f"[TELEGRAM] ✓ Enviado: {_preview!r}")
         print(f"[TELEGRAM] ✓ {_preview}")
         return True
     except Exception as e:
-        log.warning(f"[TELEGRAM] ✗ Error: {e} | msg={_preview!r}")
+        logger.warning(f"[TELEGRAM] ✗ Error: {e} | msg={_preview!r}")
         print(f"[TELEGRAM] ✗ Error enviando: {e}")
         return False
 
 
-def notify_progress(
-    processed: int,
-    total: int,
-    split: str,
+def notify_new_best_val(
+    epoch: int,
+    val_loss: float,
+    prev_best: float,
+    val_acc: float,
+    test_loss: float,
+    test_acc: float,
     token: Optional[str] = None,
     chat_id: Optional[str] = None,
+    extra_context: str = "",
 ) -> bool:
-    """Notificación de progreso."""
-    percentage = (processed / total) * 100
+    """Notificación de nuevo mejor val_loss."""
+    improvement = prev_best - val_loss
     msg = (
-        f"📊 <b>Procesamiento {split}</b>\n"
-        f"Progreso: <b>{processed}/{total}</b> ({percentage:.1f}%)"
+        f"🏆 <b>Nuevo mejor modelo</b>\n"
+        f"{extra_context}"
+        f"Val Loss: <b>{val_loss:.6f}</b> (-{improvement:.6f})\n"
+        f"Val Acc: {val_acc:.2f}%\n"
+        f"Test Loss: {test_loss:.6f}\n"
+        f"Test Acc: {test_acc:.2f}%\n"
+        f"Época: {epoch}"
     )
     return send_telegram(msg, token=token, chat_id=chat_id)
 
 
-def notify_completion(
-    total_processed: int,
-    total_skipped: int,
-    token: Optional[str] = None,
-    chat_id: Optional[str] = None,
-) -> bool:
-    """Notificación de finalización."""
-    msg = (
-        f"✅ <b>Procesamiento completado</b>\n"
-        f"Procesados: <b>{total_processed}</b>\n"
-        f"Saltados: {total_skipped}"
-    )
-    return send_telegram(msg, token=token, chat_id=chat_id)
-
-
-# --- Arquitectura HRNet ---
-BN_MOMENTUM = 0.1
-
-class Bottleneck(torch.nn.Module):
-    expansion = 4
-    def __init__(self, inplanes, planes, stride=1, downsample=None):
-        super().__init__()
-        self.conv1 = torch.nn.Conv2d(inplanes, planes, 1, bias=False)
-        self.bn1 = torch.nn.BatchNorm2d(planes, momentum=BN_MOMENTUM)
-        self.conv2 = torch.nn.Conv2d(planes, planes, 3, stride=stride, padding=1, bias=False)
-        self.bn2 = torch.nn.BatchNorm2d(planes, momentum=BN_MOMENTUM)
-        self.conv3 = torch.nn.Conv2d(planes, planes * self.expansion, 1, bias=False)
-        self.bn3 = torch.nn.BatchNorm2d(planes * self.expansion, momentum=BN_MOMENTUM)
-        self.relu = torch.nn.ReLU(inplace=True)
-        self.downsample = downsample
-
-    def forward(self, x):
-        residual = x
-        out = self.relu(self.bn1(self.conv1(x)))
-        out = self.relu(self.bn2(self.conv2(out)))
-        out = self.bn3(self.conv3(out))
-        if self.downsample is not None:
-            residual = self.downsample(x)
-        return self.relu(out + residual)
-
-class BasicBlock(torch.nn.Module):
-    expansion = 1
-    def __init__(self, inplanes, planes, stride=1, downsample=None):
-        super().__init__()
-        self.conv1 = torch.nn.Conv2d(inplanes, planes, 3, stride=stride, padding=1, bias=False)
-        self.bn1 = torch.nn.BatchNorm2d(planes, momentum=BN_MOMENTUM)
-        self.conv2 = torch.nn.Conv2d(planes, planes, 3, padding=1, bias=False)
-        self.bn2 = torch.nn.BatchNorm2d(planes, momentum=BN_MOMENTUM)
-        self.relu = torch.nn.ReLU(inplace=True)
-        self.downsample = downsample
-
-    def forward(self, x):
-        residual = x
-        out = self.relu(self.bn1(self.conv1(x)))
-        out = self.bn2(self.conv2(out))
-        if self.downsample is not None:
-            residual = self.downsample(x)
-        return self.relu(out + residual)
-
-class HighResolutionModule(torch.nn.Module):
-    def __init__(self, num_branches, num_channels, num_blocks, multi_scale_output=True):
-        super().__init__()
-        self.num_branches = num_branches
-        self.num_channels = num_channels
-        self.multi_scale_output = multi_scale_output
-        self.branches = self._make_branches(num_branches, num_channels, num_blocks)
-        self.fuse_layers = self._make_fuse_layers()
-        self.relu = torch.nn.ReLU(inplace=True)
-
-    def _make_one_branch(self, branch_idx, num_channels, num_blocks):
-        layers = []
-        for _ in range(num_blocks):
-            layers.append(BasicBlock(num_channels[branch_idx], num_channels[branch_idx]))
-        return torch.nn.Sequential(*layers)
-
-    def _make_branches(self, num_branches, num_channels, num_blocks):
-        branches = []
-        for i in range(num_branches):
-            branches.append(self._make_one_branch(i, num_channels, num_blocks))
-        return torch.nn.ModuleList(branches)
-
-    def _make_fuse_layers(self):
-        num_branches = self.num_branches
-        num_channels = self.num_channels
-        fuse_layers = []
-        for i in range(num_branches if self.multi_scale_output else 1):
-            fuse_layer = []
-            for j in range(num_branches):
-                if j > i:
-                    fuse_layer.append(torch.nn.Sequential(
-                        torch.nn.Conv2d(num_channels[j], num_channels[i], 1, bias=False),
-                        torch.nn.BatchNorm2d(num_channels[i], momentum=BN_MOMENTUM),
-                    ))
-                elif j == i:
-                    fuse_layer.append(None)
-                else:
-                    conv_downsamples = []
-                    for k in range(i - j):
-                        if k == i - j - 1:
-                            conv_downsamples.append(torch.nn.Sequential(
-                                torch.nn.Conv2d(num_channels[j], num_channels[i], 3, stride=2, padding=1, bias=False),
-                                torch.nn.BatchNorm2d(num_channels[i], momentum=BN_MOMENTUM),
-                            ))
-                        else:
-                            conv_downsamples.append(torch.nn.Sequential(
-                                torch.nn.Conv2d(num_channels[j], num_channels[j], 3, stride=2, padding=1, bias=False),
-                                torch.nn.BatchNorm2d(num_channels[j], momentum=BN_MOMENTUM),
-                                torch.nn.ReLU(inplace=True),
-                            ))
-                    fuse_layer.append(torch.nn.Sequential(*conv_downsamples))
-            fuse_layers.append(torch.nn.ModuleList(fuse_layer))
-        return torch.nn.ModuleList(fuse_layers)
-
-    def forward(self, x):
-        for i in range(self.num_branches):
-            x[i] = self.branches[i](x[i])
-        x_fuse = []
-        for i in range(len(self.fuse_layers)):
-            y = 0
-            for j in range(self.num_branches):
-                if i == j:
-                    y = y + x[j]
-                elif j > i:
-                    y = y + torch.nn.functional.interpolate(
-                        self.fuse_layers[i][j](x[j]),
-                        size=x[i].shape[2:],
-                        mode='bilinear',
-                        align_corners=True
-                    )
-                else:
-                    y = y + self.fuse_layers[i][j](x[j])
-            x_fuse.append(self.relu(y))
-        return x_fuse
-
-class PoseHRNet(torch.nn.Module):
-    def __init__(self, width=48, num_joints=17):
-        super().__init__()
-        C = width
-        self.conv1 = torch.nn.Conv2d(3, 64, 3, stride=2, padding=1, bias=False)
-        self.bn1 = torch.nn.BatchNorm2d(64, momentum=BN_MOMENTUM)
-        self.conv2 = torch.nn.Conv2d(64, 64, 3, stride=2, padding=1, bias=False)
-        self.bn2 = torch.nn.BatchNorm2d(64, momentum=BN_MOMENTUM)
-        self.relu = torch.nn.ReLU(inplace=True)
+# ══════════════════════════════════════════════════════════════════════════════
+# DATASET CON AUGMENTACIÓN
+# ══════════════════════════════════════════════════════════════════════════════
+class NoiseHeatmapDataset(Dataset):
+    """
+    Dataset con augmentación:
+    - Cambios de iluminación (brillo/contraste)
+    - Flip horizontal (con heatmap correspondiente)
+    """
+    def __init__(self, imgs_dir: str, heatmaps_dir: str, input_size=(288, 384), 
+                 augment=True, num_brightness_augs=2):
+        self.imgs_dir = Path(imgs_dir)
+        self.heatmaps_dir = Path(heatmaps_dir)
+        self.input_size = input_size
+        self.augment = augment
+        self.num_brightness_augs = num_brightness_augs
         
-        downsample = torch.nn.Sequential(
-            torch.nn.Conv2d(64, 256, 1, bias=False),
-            torch.nn.BatchNorm2d(256, momentum=BN_MOMENTUM),
-        )
-        self.layer1 = torch.nn.Sequential(
-            Bottleneck(64, 64, downsample=downsample),
-            Bottleneck(256, 64),
-            Bottleneck(256, 64),
-            Bottleneck(256, 64),
-        )
+        valid_extensions = {'.jpg', '.jpeg', '.png'}
+        all_img_paths = [p for p in self.imgs_dir.rglob('*') if p.suffix.lower() in valid_extensions]
         
-        self.transition1 = torch.nn.ModuleList([
-            torch.nn.Sequential(
-                torch.nn.Conv2d(256, C, 3, padding=1, bias=False),
-                torch.nn.BatchNorm2d(C, momentum=BN_MOMENTUM),
-                torch.nn.ReLU(inplace=True),
-            ),
-            torch.nn.Sequential(torch.nn.Sequential(
-                torch.nn.Conv2d(256, C * 2, 3, stride=2, padding=1, bias=False),
-                torch.nn.BatchNorm2d(C * 2, momentum=BN_MOMENTUM),
-                torch.nn.ReLU(inplace=True),
-            )),
-        ])
+        if not all_img_paths:
+            raise ValueError(f"No se encontraron imágenes en {imgs_dir}")
         
-        self.stage2 = torch.nn.Sequential(
-            HighResolutionModule(2, [C, C * 2], num_blocks=4),
-        )
+        self.img_paths = all_img_paths  # temporal para que _validate_pairs funcione
+        valid_indices, n_total = self._validate_pairs()
+        self.img_paths = [all_img_paths[i] for i in valid_indices]
+        self._n_total_original = n_total
+        self._n_valid = len(self.img_paths)
         
-        self.transition2 = torch.nn.ModuleList([
-            None, None,
-            torch.nn.Sequential(torch.nn.Sequential(
-                torch.nn.Conv2d(C * 2, C * 4, 3, stride=2, padding=1, bias=False),
-                torch.nn.BatchNorm2d(C * 4, momentum=BN_MOMENTUM),
-                torch.nn.ReLU(inplace=True),
-            )),
-        ])
+        if not self.img_paths:
+            raise ValueError(f"No hay pares válidos en {imgs_dir}")
         
-        stage3_modules = []
-        for i in range(4):
-            stage3_modules.append(
-                HighResolutionModule(3, [C, C * 2, C * 4], num_blocks=4, multi_scale_output=True)
-            )
-        self.stage3 = torch.nn.Sequential(*stage3_modules)
+        # Valores de normalización ImageNet
+        self.mean = np.array([0.485, 0.456, 0.406], dtype=np.float32)
+        self.std = np.array([0.229, 0.224, 0.225], dtype=np.float32)
         
-        self.transition3 = torch.nn.ModuleList([
-            None, None, None,
-            torch.nn.Sequential(torch.nn.Sequential(
-                torch.nn.Conv2d(C * 4, C * 8, 3, stride=2, padding=1, bias=False),
-                torch.nn.BatchNorm2d(C * 8, momentum=BN_MOMENTUM),
-                torch.nn.ReLU(inplace=True),
-            )),
-        ])
-        
-        stage4_modules = []
-        for i in range(3):
-            multi_scale_output = True if i < 2 else False
-            stage4_modules.append(
-                HighResolutionModule(4, [C, C * 2, C * 4, C * 8], num_blocks=4,
-                                     multi_scale_output=multi_scale_output)
-            )
-        self.stage4 = torch.nn.Sequential(*stage4_modules)
-        self.final_layer = torch.nn.Conv2d(C, num_joints, 1)
+        # Multiplicador de samples por augmentación
+        if self.augment:
+            self.samples_per_img = (1 + self.num_brightness_augs) * 2
+        else:
+            self.samples_per_img = 1
 
-    def forward(self, x):
-        x = self.relu(self.bn1(self.conv1(x)))
-        x = self.relu(self.bn2(self.conv2(x)))
-        x = self.layer1(x)
+    def _validate_pairs(self):
+          
+            # Valida todos los pares imagen/heatmap. Descarta los que:
+            # - No tienen heatmap correspondiente
+            # - El heatmap no tiene shape (23, H, W)
+            # - Algún canal del heatmap está completamente vacío (suma == 0)
+            
+            # Devuelve lista de índices válidos de self.img_paths.
+            
+        valid_indices = []
+        n_total = len(self.img_paths)
         
-        x_list = []
-        for i in range(2):
-            x_list.append(self.transition1[i](x))
-        y_list = self.stage2[0](x_list)
-        
-        x_list = []
-        for i in range(3):
-            if self.transition2[i] is not None:
-                x_list.append(self.transition2[i](y_list[-1]))
+        for i, img_path in enumerate(tqdm(self.img_paths, desc="Validando pares", leave=False)):
+            stem = img_path.stem
+            m = re.match(r'^(.+)_rgb_(clean(?:_aug\d+)?|noise_[\d.]+)(_flip)?$', stem)
+            if m is not None:
+                base = m.group(1)
+                is_flip = m.group(3) is not None
+                npy_name = f"{base}_rgb_flip.npy" if is_flip else f"{base}_rgb.npy"
             else:
-                x_list.append(y_list[i])
+                if stem.endswith('_rgb'):
+                    npy_name = f"{stem}.npy"
+                else:
+                    continue  # nombre no reconocido
+
+            heatmap_path = self.heatmaps_dir / npy_name
+            if not heatmap_path.exists():
+                continue
+
+            try:
+                heatmap = np.load(heatmap_path)
+            except Exception:
+                continue
+
+            # Validar shape
+            if heatmap.ndim != 3 or heatmap.shape[0] != 23:
+                continue
+
+            # Validar que ningún canal esté completamente vacío
+            if np.any(heatmap.sum(axis=(1, 2)) == 0):
+                continue
+
+            valid_indices.append(i)
+
+        return valid_indices, n_total
+
+    def __len__(self):
+        return len(self.img_paths) * self.samples_per_img
+
+    def __getitem__(self, idx):
+        img_idx = idx // self.samples_per_img
+        aug_variant = idx % self.samples_per_img
+    
+        img_path = self.img_paths[img_idx]
+
         
-        y_list = x_list
-        for module in self.stage3:
-            y_list = module(y_list)
+        # Emparejamiento con heatmap - VERSIÓN SIMPLIFICADA
+        stem = img_path.stem
         
-        x_list = []
-        for i in range(4):
-            if self.transition3[i] is not None:
-                x_list.append(self.transition3[i](y_list[-1]))
+        # Intentar primero el patrón complejo (imágenes con sufijos)
+        m = re.match(r'^(.+)_rgb_(clean(?:_aug\d+)?|noise_[\d.]+)(_flip)?$', stem)
+        
+        if m is not None:
+            # Imagen con sufijos: {base}_rgb_{clean|noise_X.XX}[_flip]
+            base = m.group(1)
+            is_flip = m.group(3) is not None
+            npy_name = f"{base}_rgb_flip.npy" if is_flip else f"{base}_rgb.npy"
+        else:
+            # Imagen simple: {base}_rgb.png
+            # Intentar patrón simple
+            if stem.endswith('_rgb'):
+                base = stem  # El stem completo es la base
+                npy_name = f"{base}.npy"
             else:
-                x_list.append(y_list[i])
+                raise ValueError(f"Nombre de imagen no reconocido: {img_path.name}")
         
-        y_list = x_list
-        for module in self.stage4:
-            y_list = module(y_list)
+        heatmap_path = self.heatmaps_dir / npy_name
         
-        x = self.final_layer(y_list[0])
-        return x
+        if not heatmap_path.exists():
+            raise FileNotFoundError(f"Falta el heatmap esperado: {heatmap_path}")
+
+        # Cargar imagen
+        image = cv2.imread(str(img_path))
+        if image is None:
+            raise ValueError(f"No se pudo cargar la imagen: {img_path}")
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        
+        # Cargar heatmap 
+        heatmap = np.load(heatmap_path).astype(np.float32)
+        
+        # APLICAR AUGMENTACIÓN SOLO SI ESTÁ ACTIVADA
+        if self.augment:
+            # Aplicar augmentación según variant
+            do_flip = aug_variant >= (self.samples_per_img // 2)
+            brightness_idx = aug_variant % (self.samples_per_img // 2)
+            
+            if brightness_idx > 0:
+                # Cambio de brillo/contraste
+                alpha = np.random.uniform(0.7, 1.3)
+                beta = np.random.randint(-30, 30)
+                image = cv2.convertScaleAbs(image, alpha=alpha, beta=beta)
+            
+            if do_flip:
+                # Flip horizontal
+                image = cv2.flip(image, 1)
+                heatmap = self._flip_heatmap(heatmap)
+        
+        # Resize y normalización (siempre se hace)
+        h, w = self.input_size
+        image = cv2.resize(image, (w, h), interpolation=cv2.INTER_LINEAR)
+        image = image.astype(np.float32) / 255.0
+        image = (image - self.mean) / self.std
+        
+        image_tensor = torch.from_numpy(image.transpose(2, 0, 1)).float()
+        heatmap_tensor = torch.from_numpy(heatmap).float()
+
+        return image_tensor, heatmap_tensor
+
+    def _flip_heatmap(self, heatmap):
+        """Flip horizontal del heatmap (23 canales)."""
+        # Flip espacial
+        flipped = np.flip(heatmap, axis=2).copy()
+        
+        # Swap de keypoints simétricos (HRNet COCO)
+        # Índices: [left, right] pares que se intercambian
+        swap_pairs = [
+        (1, 2),   # ojos
+        (3, 4),   # orejas
+        (5, 6),   # hombros
+        (7, 8),   # codos
+        (9, 10),  # muñecas
+        (11, 12), # caderas
+        (13, 14), # rodillas
+        (15, 16), # tobillos
+    ]
+        
+        for left, right in swap_pairs:
+            flipped[[left, right]] = flipped[[right, left]]
+        
+        # Para keypoints de manos (17-22), asumimos que también son simétricos
+        # [17, 18, 19] mano izquierda → [20, 21, 22] mano derecha
+        # flipped[[17, 18, 19, 20, 21, 22]] = flipped[[20, 21, 22, 17, 18, 19]] ESTO ESTÁ MAL
+
+        flipped[[17, 19, 21, 18, 20, 22]] = flipped[[18, 20, 22, 17, 19, 21]]
+        
+        return flipped
 
 
-# --- Funciones auxiliares ---
-def load_hrnet_model(model_path, device):
-    """Cargar modelo HRNet"""
-    model = PoseHRNet(width=48, num_joints=17)
+def subsample_dataset(dataset, fraction, seed=42):
+    """Crea un Subset con fracción de datos del dataset original."""
+    if fraction is None or fraction >= 1.0:
+        return dataset
+    
+    n_total = len(dataset)
+    n_subset = max(1, int(n_total * fraction))
+    
+    generator = torch.Generator().manual_seed(seed)
+    indices = torch.randperm(n_total, generator=generator)[:n_subset].tolist()
+    
+    return Subset(dataset, indices)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# MODELO EXTENDIDO A 23 KEYPOINTS
+# ══════════════════════════════════════════════════════════════════════════════
+def load_pretrained_and_extend(model, weights_path, device, num_old_joints=17, num_new_joints=23):
+    """
+    Carga pesos preentrenados (17 kp) y extiende a 23 keypoints.
+    
+    - Copia pesos compatibles del backbone
+    - Para final_layer:
+        * Copia pesos de los 17 canales originales
+        * Inicializa 6 nuevos canales con Kaiming normal
+    """
+    logger.info(f"Cargando pesos pre-entrenados desde {weights_path}")
     try:
-        checkpoint = torch.load(model_path, map_location=device, weights_only=False)
+        checkpoint = torch.load(weights_path, map_location=device, weights_only=False)
     except TypeError:
-        checkpoint = torch.load(model_path, map_location=device)
-    
+        checkpoint = torch.load(weights_path, map_location=device)
+        
     if isinstance(checkpoint, dict) and 'state_dict' in checkpoint:
-        checkpoint = checkpoint['state_dict']
+        state_dict_old = checkpoint['state_dict']
+    else:
+        state_dict_old = checkpoint
     
-    model.load_state_dict(checkpoint, strict=True)
-    model.eval()
-    model.to(device)
+    # Cargar estado actual del modelo (23 kp)
+    state_dict_new = model.state_dict()
+    
+    # Copiar pesos compatibles
+    for name, param in state_dict_old.items():
+        if name in state_dict_new:
+            if state_dict_new[name].shape == param.shape:
+                state_dict_new[name] = param
+            elif 'final_layer' in name:
+                # Extender final_layer
+                if 'weight' in name:
+                    # state_dict_old[name]: [17, C, 1, 1]
+                    # state_dict_new[name]: [23, C, 1, 1]
+                    state_dict_new[name][:num_old_joints] = param
+                    # Inicializar nuevos canales
+                    nn.init.kaiming_normal_(state_dict_new[name][num_old_joints:])
+                    logger.info(f"  Extendido {name}: {param.shape} → {state_dict_new[name].shape}")
+                elif 'bias' in name:
+                    # [17] → [23]
+                    state_dict_new[name][:num_old_joints] = param
+                    nn.init.zeros_(state_dict_new[name][num_old_joints:])
+                    logger.info(f"  Extendido {name}: {param.shape} → {state_dict_new[name].shape}")
+            else:
+                logger.warning(f"  Saltando {name}: shape mismatch {param.shape} vs {state_dict_new[name].shape}")
+    
+    model.load_state_dict(state_dict_new, strict=True)
+    logger.info("Pesos cargados y extendidos correctamente")
     return model
 
 
-def preprocess_image_hrnet(image_bgr, target_size=(288, 384)):
-    """Preprocesar imagen para HRNet"""
-    # 1. Resize a 512x512
-    img_512 = cv2.resize(image_bgr, (512, 512), interpolation=cv2.INTER_LINEAR)
+def freeze_backbone_partial(model, freeze_until='stage4'):
+    """
+    Congela backbone hasta cierta etapa.
     
-    # 2. Resize a target_size (288, 384)
-    h, w = target_size
-    img_resized = cv2.resize(img_512, (w, h), interpolation=cv2.INTER_LINEAR)
+    - 'stage4': Congela TODO excepto final_layer (más conservador)
+    - 'stage3': Congela hasta stage3, entrena stage4 + final_layer
+    - 'stage2': Congela hasta stage2
+    - 'none': No congela nada
+    """
+    if freeze_until == 'stage4':
+        freeze_stages = ['conv1', 'bn1', 'conv2', 'bn2', 'layer1', 
+                        'transition1', 'stage2', 'transition2', 'stage3', 
+                        'transition3', 'stage4']
+    elif freeze_until == 'stage3':
+        freeze_stages = ['conv1', 'bn1', 'conv2', 'bn2', 'layer1', 
+                        'transition1', 'stage2', 'transition2', 'stage3', 
+                        'transition3']
+    elif freeze_until == 'stage2':
+        freeze_stages = ['conv1', 'bn1', 'conv2', 'bn2', 'layer1', 
+                        'transition1', 'stage2', 'transition2']
+    elif freeze_until == 'none':
+        freeze_stages = []
+    else:
+        raise ValueError(f"freeze_until inválido: {freeze_until}")
     
-    # 3. Normalización ImageNet
-    mean = np.array([0.485, 0.456, 0.406], dtype=np.float32)
-    std = np.array([0.229, 0.224, 0.225], dtype=np.float32)
+    for name, param in model.named_parameters():
+        for stage in freeze_stages:
+            if name.startswith(stage):
+                param.requires_grad = False
+                break
     
-    img_rgb = cv2.cvtColor(img_resized, cv2.COLOR_BGR2RGB).astype(np.float32)
-    img_rgb = img_rgb / 255.0
-    img_rgb = (img_rgb - mean) / std
-    
-    # 4. To tensor
-    tensor = torch.from_numpy(img_rgb.transpose(2, 0, 1)).float()
-    
-    return tensor, img_resized
+    # Contar parámetros congelados/entrenables
+    frozen = sum(p.numel() for p in model.parameters() if not p.requires_grad)
+    trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    logger.info(f"Parámetros congelados: {frozen:,} | Entrenables: {trainable:,}")
 
 
-def transform_mediapipe_to_heatmap(x_norm, y_norm, heatmap_w, heatmap_h):
-    """Transformar coords MediaPipe normalizadas a espacio heatmap HRNet"""
-    # 1. De normalizado a píxeles 160x120
-    x_160 = x_norm * 160
-    y_120 = y_norm * 120
+# ══════════════════════════════════════════════════════════════════════════════
+# MÉTRICAS: ACCURACY (PCK - Percentage of Correct Keypoints)
+# ══════════════════════════════════════════════════════════════════════════════
+def compute_pck(pred_heatmaps, gt_heatmaps, threshold=0.05):
+    """
+    Calcula PCK: porcentaje de keypoints predichos dentro de threshold.
     
-    # 2. Escalar a 512x512
-    x_512 = x_160 * (512 / 160)
-    y_512 = y_120 * (512 / 120)
+    Criterio: argmax de heatmap predicho debe estar cerca del gt.
+    """
+    B, C, H, W = pred_heatmaps.shape
     
-    # 3. Escalar a 384x288
-    x_384 = x_512 * (384 / 512)
-    y_288 = y_512 * (288 / 512)
+    # Extraer coordenadas de máximos
+    pred_coords = []
+    gt_coords = []
     
-    # 4. Escalar a resolución heatmap
-    x_hm = x_384 * (heatmap_w / 384)
-    y_hm = y_288 * (heatmap_h / 288)
+    for b in range(B):
+        for c in range(C):
+            pred_hm = pred_heatmaps[b, c].cpu().numpy()
+            gt_hm = gt_heatmaps[b, c].cpu().numpy()
+            
+            # Argmax
+            pred_y, pred_x = np.unravel_index(pred_hm.argmax(), pred_hm.shape)
+            gt_y, gt_x = np.unravel_index(gt_hm.argmax(), gt_hm.shape)
+            
+            pred_coords.append([pred_x, pred_y])
+            gt_coords.append([gt_x, gt_y])
     
-    return x_hm, y_hm
+    pred_coords = np.array(pred_coords)
+    gt_coords = np.array(gt_coords)
+    
+    # Distancia euclidiana normalizada por tamaño del heatmap
+    distances = np.linalg.norm(pred_coords - gt_coords, axis=1)
+    normalized_dist = distances / np.sqrt(H**2 + W**2)
+    
+    # Porcentaje dentro del threshold
+    correct = (normalized_dist < threshold).sum()
+    total = len(distances)
+    
+    pck = 100.0 * correct / total
+    return pck
 
 
-def create_mediapipe_heatmaps(df, hand_keypoints, heatmap_shape, sigma=2.0):
-    """Crear heatmaps de MediaPipe IDÉNTICOS a los de HRNet"""
-    heatmap_h, heatmap_w = heatmap_shape
-    mediapipe_heatmaps = []
+import io
+import base64
+from PIL import Image
+
+# Añadir esta función después de compute_pck:
+
+def visualize_predictions(model, dataset, device, indices=[0, 1], input_size=(288, 384)):
+    """
+    Genera visualizaciones de predicciones sobre imágenes específicas del dataset.
     
-    for kp_idx in hand_keypoints:
-        row = df[df['landmark_id'] == kp_idx]
-        heatmap = np.zeros((heatmap_h, heatmap_w), dtype=np.float32)
+    Args:
+        model: Modelo a evaluar
+        dataset: Dataset de donde sacar las imágenes
+        device: Device donde está el modelo
+        indices: Índices de las imágenes a visualizar
+        input_size: Tamaño de entrada del modelo (H, W)
         
-        if not row.empty:
-            x_norm = row['x'].values[0]
-            y_norm = row['y'].values[0]
-            
-            x_hm, y_hm = transform_mediapipe_to_heatmap(x_norm, y_norm, heatmap_w, heatmap_h)
-            
-            # Generar gaussiana 2D igual que HRNet
-            size = int(6 * sigma + 1)
-            x0 = y0 = size // 2
-            
-            y_range = np.arange(0, size, 1, dtype=np.float32)
-            x_range = np.arange(0, size, 1, dtype=np.float32)
-            y_grid, x_grid = np.meshgrid(y_range, x_range, indexing='ij')
-            
-            gaussian = np.exp(-((x_grid - x0)**2 + (y_grid - y0)**2) / (2 * sigma**2))
-            
-            x_int, y_int = int(round(x_hm)), int(round(y_hm))
-            
-            x_start = max(0, x_int - x0)
-            y_start = max(0, y_int - y0)
-            x_end = min(heatmap_w, x_int + x0 + 1)
-            y_end = min(heatmap_h, y_int + y0 + 1)
-            
-            g_x_start = max(0, x0 - x_int)
-            g_y_start = max(0, y0 - y_int)
-            g_x_end = g_x_start + (x_end - x_start)
-            g_y_end = g_y_start + (y_end - y_start)
-            
-            if x_end > x_start and y_end > y_start:
-                heatmap[y_start:y_end, x_start:x_end] = np.maximum(
-                    heatmap[y_start:y_end, x_start:x_end],
-                    gaussian[g_y_start:g_y_end, g_x_start:g_x_end]
-                )
-        
-        mediapipe_heatmaps.append(heatmap)
+    Returns:
+        Lista de imágenes PIL con keypoints superpuestos
+    """
+    model.eval()
     
-    return np.array(mediapipe_heatmaps)
-
-
-def collect_csv_image_pairs(csv_root, img_root, split):
-    """Recolectar pares CSV-imagen para un split (train_val o test)"""
-    pairs = []
+    # Colores para diferentes tipos de keypoints
+    # Body (0-16): azul, Hands (17-22): rojo
+    colors_body = [(0, 255, 0)] * 17  # Verde para body
+    colors_hands = [(255, 0, 0)] * 6   # Rojo para hands
+    colors = colors_body + colors_hands
     
-    csv_split_path = Path(csv_root) / split
-    img_split_path = Path(img_root) / split
+    # Conexiones de skeleton COCO (body)
+    skeleton_body = [
+        (0, 1), (0, 2),  # nariz -> ojos
+        (1, 3), (2, 4),  # ojos -> orejas
+        # (0, 5), (0, 6),  # nariz -> hombros (ESTA CONEXIÓN NO EXISTE EN COCO)
+        (5, 7), (7, 9),  # brazo izq
+        (6, 8), (8, 10), # brazo der
+        (5, 6),          # hombros
+        (5, 11), (6, 12),# hombros -> caderas
+        (11, 12),        # caderas
+        (11, 13), (13, 15), # pierna izq
+        (12, 14), (14, 16), # pierna der
+    ]
     
-    # Buscar en las carpetas 00_15, 00_16, 00_17
-    for view_folder in ['00_15', '00_16', '00_17']:
-        csv_view_path = csv_split_path / view_folder
-        img_view_path = img_split_path / view_folder
-        
-        if not csv_view_path.exists():
-            continue
-        
-        # Buscar todos los CSVs _rgb
-        for csv_file in csv_view_path.glob('*_rgb.csv'):
-            # Construir nombre de imagen correspondiente
-            img_name = csv_file.stem + '.png'  # Cambiar .csv por .png
-            img_file = img_view_path / img_name
-            
-            if img_file.exists():
-                pairs.append({
-                    'csv_path': csv_file,
-                    'img_path': img_file,
-                    'basename': csv_file.stem,  # nombre sin extensión
-                    'split': split
-                })
+    # Conexiones de manos (simplificado: muñeca -> puntos de mano)
+    # skeleton_hands = [
+    #     (5, 17), (5, 18), (5, 19),  # muñeca izq -> dedos
+    #     (6, 20), (6, 21), (6, 22),  # muñeca der -> dedos
+    # ]
+
+    skeleton_hands = [
+        (9, 17), (9, 19), (9, 21),     # muñeca izq (COCO / HR NET) -> dedos(Mediapipe)
+        (10, 18), (10, 20), (10, 22),  # muñeca der (COCO / HR NET) -> dedos(Mediapipe)
+    ]
     
-    return pairs
-
-
-def process_batch(model, image_tensors, device):
-    """Procesar batch de imágenes con HRNet"""
-    batch = torch.stack(image_tensors).to(device)
+    skeleton = skeleton_body + skeleton_hands
+    
+    vis_images = []
     
     with torch.no_grad():
-        heatmaps = model(batch)
+        for idx in indices:
+            img_tensor, heatmap_gt = dataset[idx]
+            img_batch = img_tensor.unsqueeze(0).to(device)
+            heatmap_pred = model(img_batch)[0]
+            
+            img_np = img_tensor.cpu().numpy().transpose(1, 2, 0)
+            mean = np.array([0.485, 0.456, 0.406])
+            std = np.array([0.229, 0.224, 0.225])
+            img_np = (img_np * std + mean) * 255.0
+            img_np = np.clip(img_np, 0, 255).astype(np.uint8)
+            img_vis = cv2.cvtColor(img_np, cv2.COLOR_RGB2BGR)
+            
+            H_hm, W_hm = heatmap_pred.shape[1:]
+            H_img, W_img = img_np.shape[:2]
+            
+            keypoints = []
+            for c in range(23):
+                hm = heatmap_pred[c].cpu().numpy()
+                y, x = np.unravel_index(hm.argmax(), hm.shape)
+                x_img = int(x * W_img / W_hm)
+                y_img = int(y * H_img / H_hm)
+                conf = hm[y, x]
+                keypoints.append((x_img, y_img, conf))
+            
+            for i, j in skeleton:
+                if i < len(keypoints) and j < len(keypoints):
+                    x1, y1, conf1 = keypoints[i]
+                    x2, y2, conf2 = keypoints[j]
+                    if conf1 > 0.1 and conf2 > 0.1:
+                        color = (0, 255, 0) if i < 17 and j < 17 else (255, 0, 0)
+                        cv2.line(img_vis, (x1, y1), (x2, y2), color, 2)
+            
+            for kp_idx, (x, y, conf) in enumerate(keypoints):
+                if conf > 0.1:
+                    cv2.circle(img_vis, (x, y), 4, colors[kp_idx], -1)
+                    cv2.circle(img_vis, (x, y), 5, (255, 255, 255), 1)
+            
+            img_vis_rgb = cv2.cvtColor(img_vis, cv2.COLOR_BGR2RGB)
+            vis_images.append(img_vis_rgb)  # numpy array, no PIL
     
-    return heatmaps.cpu().numpy()
+    return vis_images
+
+def make_collage(images, cols=5):
+    """Crea un collage a partir de una lista de imágenes numpy (H, W, 3)."""
+    rows = (len(images) + cols - 1) // cols
+    h, w = images[0].shape[:2]
+    
+    collage = np.zeros((rows * h, cols * w, 3), dtype=np.uint8)
+    for i, img in enumerate(images):
+        r, c = divmod(i, cols)
+        collage[r*h:(r+1)*h, c*w:(c+1)*w] = img
+    
+    return collage
 
 
+def save_epoch_visualizations(images, output_dir, epoch):
+    """Guarda imágenes individuales y collage por época."""
+    epoch_dir = Path(output_dir) / f"epoch_{epoch:04d}"
+    epoch_dir.mkdir(parents=True, exist_ok=True)
+    
+    for i, img in enumerate(images):
+        img_bgr = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+        cv2.imwrite(str(epoch_dir / f"img_{i:02d}.png"), img_bgr)
+    
+    collage = make_collage(images, cols=5)
+    collage_path = epoch_dir / "collage.png"
+    collage_bgr = cv2.cvtColor(collage, cv2.COLOR_RGB2BGR)
+    cv2.imwrite(str(collage_path), collage_bgr)
+    
+    return collage, collage_path
 
+
+def send_telegram_with_images(
+    message: str,
+    collage: np.ndarray,
+    token: Optional[str] = None,
+    chat_id: Optional[str] = None,
+    parse_mode: str = "HTML",
+) -> bool:
+    token = token or os.environ.get("TELEGRAM_BOT_TOKEN")
+    chat_id = chat_id or os.environ.get("TELEGRAM_CHAT_ID")
+    if not token or not chat_id:
+        return False
+    
+    try:
+        url_msg = f"https://api.telegram.org/bot{token}/sendMessage"
+        payload_msg = urllib.parse.urlencode({
+            "chat_id": chat_id,
+            "text": message,
+            "parse_mode": parse_mode,
+        }).encode("utf-8")
+        req = urllib.request.Request(url_msg, data=payload_msg, method="POST")
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            result = json.loads(resp.read().decode())
+            if not result.get("ok"):
+                logger.warning(f"[TELEGRAM] ✗ Fallo enviando mensaje: {result}")
+                return False
+        
+        # Convertir collage numpy a bytes PNG
+        collage_pil = Image.fromarray(collage)
+        img_byte_arr = io.BytesIO()
+        collage_pil.save(img_byte_arr, format='PNG')
+        img_byte_arr.seek(0)
+        
+        boundary = '----WebKitFormBoundary' + ''.join(
+            np.random.choice(list('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'), 16)
+        )
+        body = (
+            f'--{boundary}\r\n'
+            f'Content-Disposition: form-data; name="chat_id"\r\n\r\n'
+            f'{chat_id}\r\n'
+            f'--{boundary}\r\n'
+            f'Content-Disposition: form-data; name="photo"; filename="collage.png"\r\n'
+            f'Content-Type: image/png\r\n\r\n'
+        ).encode('utf-8')
+        body += img_byte_arr.read()
+        body += f'\r\n--{boundary}--\r\n'.encode('utf-8')
+        
+        url_photo = f"https://api.telegram.org/bot{token}/sendPhoto"
+        req = urllib.request.Request(
+            url_photo, data=body,
+            headers={'Content-Type': f'multipart/form-data; boundary={boundary}'}
+        )
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            result = json.loads(resp.read().decode())
+            if not result.get("ok"):
+                logger.warning(f"[TELEGRAM] ✗ Fallo enviando collage: {result}")
+                return False
+        
+        logger.info("[TELEGRAM] ✓ Collage enviado")
+        return True
+    
+    except Exception as e:
+        logger.warning(f"[TELEGRAM] ✗ Error: {e}")
+        return False
+
+
+# Modificar la sección de notificación en el bucle de entrenamiento:
+
+
+def evaluate(model, dataloader, criterion, device, alpha=2.0):
+    """
+    Evalúa el modelo: loss total + accuracy (PCK).
+    
+    Returns:
+        avg_loss, avg_acc, avg_loss_old, avg_loss_new
+    """
+    model.eval()
+    total_loss = 0.0
+    total_loss_old = 0.0
+    total_loss_new = 0.0
+    total_pck = 0.0
+    n_batches = 0
+    
+    with torch.no_grad():
+        for images, heatmaps in dataloader:
+            images = images.to(device, non_blocking=True)
+            heatmaps = heatmaps.to(device, non_blocking=True)
+            
+            outputs = model(images)
+            
+            # Loss ponderada
+            loss_old = criterion(outputs[:, :17], heatmaps[:, :17])
+            loss_new = criterion(outputs[:, 17:], heatmaps[:, 17:])
+            loss = loss_old + alpha * loss_new
+            
+            # Accuracy (PCK)
+            pck = compute_pck(outputs, heatmaps, threshold=0.05)
+            
+            total_loss += loss.item()
+            total_loss_old += loss_old.item()
+            total_loss_new += loss_new.item()
+            total_pck += pck
+            n_batches += 1
+    
+    avg_loss = total_loss / n_batches
+    avg_loss_old = total_loss_old / n_batches
+    avg_loss_new = total_loss_new / n_batches
+    avg_pck = total_pck / n_batches
+    
+    return avg_loss, avg_pck, avg_loss_old, avg_loss_new
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# MAIN
+# ══════════════════════════════════════════════════════════════════════════════
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--csv_root', type=str, required=True,
-                        help='Ruta raíz de CSVs')
-    parser.add_argument('--img_root', type=str, required=True,
-                        help='Ruta raíz de imágenes')
-    parser.add_argument('--model_path', type=str, required=False, default="/nas/antoniodetoro/qwen/Qwen-Image-Edit-Angles-2/src/models/pose_hrnet_w48_384x288.pth",
-                        help='Ruta del modelo HRNet')
-    parser.add_argument('--output_root', type=str, required=True,
-                        help='Ruta raíz de salida')
-    parser.add_argument('--batch_size', type=int, default=8,
-                        help='Batch size para HRNet')
-    parser.add_argument('--device', type=str, default='cuda',
-                        help='Device (cuda o cpu)')
-    parser.add_argument('--overwrite', action='store_true',
-                        help='Sobrescribir archivos existentes. Si no se especifica, se saltan los ya procesados')
-    
+    parser = argparse.ArgumentParser(description='Fine-Tuning HRNet: 17→23 keypoints')
+    parser.add_argument('--imgs-dir', type=str, required=True,
+                        help='Directorio base de las imágenes (train_val/ y test/)')
+    parser.add_argument('--heatmaps-dir', type=str, required=True,
+                        help='Directorio base de los heatmaps .npy (train_val/ y test/)')
+    parser.add_argument('--model-path', type=str, default='./models/pose_hrnet_w48_384x288.pth',
+                        help='Ruta al modelo base (17 kp)')
+    parser.add_argument('--output-model', type=str, default='./models/hrnet_23kp_best.pth',
+                        help='Ruta donde guardar el mejor modelo')
+    parser.add_argument('--output-stats', type=str, default='./training_stats_23kp.csv',
+                        help='CSV con estadísticas de entrenamiento')
+    parser.add_argument('--epochs', type=int, default=100, help='Número máximo de épocas')
+    parser.add_argument('--batch-size', type=int, default=12, help='Tamaño del batch')
+    parser.add_argument('--lr-backbone', type=float, default=1e-5, help='LR para stage4')
+    parser.add_argument('--lr-head', type=float, default=1e-3, help='LR para final_layer')
+    parser.add_argument('--alpha', type=float, default=2.0, 
+                        help='Peso de loss para nuevos keypoints (loss = loss_old + alpha*loss_new)')
+    parser.add_argument('--val-split', type=float, default=0.2, help='Fracción de train_val para validación')
+    parser.add_argument('--early-stopping', type=int, default=10, help='Paciencia para early stopping')
+    parser.add_argument('--seed', type=int, default=42, help='Semilla aleatoria')
+    parser.add_argument('--gpus', type=int, nargs='+', default=None, help='IDs de GPU para DataParallel')
+    parser.add_argument('--freeze-until', type=str, default='stage3', 
+                        choices=['none', 'stage2', 'stage3', 'stage4'],
+                        help='Hasta qué etapa congelar el backbone')
+    parser.add_argument('--augment', action='store_true', help='Activar augmentación de datos')
+    parser.add_argument('--num-brightness-augs', type=int, default=2, 
+                        help='Número de variantes de brillo por imagen')
+    parser.add_argument('--data-subset', type=float, default=None,
+                        help='Porcentaje de datos a usar (0.0-1.0). Ej: 0.1 = 10%% del dataset')
+
     args = parser.parse_args()
-    
-    # Cargar .env si existe
+
+    # Cargar .env para Telegram
     load_dotenv()
     telegram_token = os.environ.get("TELEGRAM_BOT_TOKEN")
     telegram_chat_id = os.environ.get("TELEGRAM_CHAT_ID")
     use_telegram = telegram_token and telegram_chat_id
     
     if use_telegram:
-        print(f"[TELEGRAM] ✓ Configurado")
+        logger.info("[TELEGRAM] ✓ Configurado")
     else:
-        print(f"[TELEGRAM] ✗ No configurado (falta .env o variables)")
+        logger.info("[TELEGRAM] ✗ No configurado")
+
+    # Rutas
+    imgs_dir = Path(args.imgs_dir)
+    heatmaps_dir = Path(args.heatmaps_dir)
+    train_imgs_dir = imgs_dir / 'train_val'
+    train_heatmaps_dir = heatmaps_dir / 'train_val'
+    test_imgs_dir = imgs_dir / 'test'
+    test_heatmaps_dir = heatmaps_dir / 'test'
+
+    # Device
+    use_parallel = False
+    if args.gpus is not None and len(args.gpus) > 1 and torch.cuda.is_available():
+        device = torch.device(f'cuda:{args.gpus[0]}')
+        use_parallel = True
+        logger.info(f"Modo DataParallel en GPUs: {args.gpus}")
+    elif torch.cuda.is_available():
+        gpu_id = args.gpus[0] if args.gpus else 0
+        device = torch.device(f'cuda:{gpu_id}')
+        logger.info(f"Usando GPU: {gpu_id}")
+    else:
+        device = torch.device('cpu')
+    logger.info(f"Device: {device}")
+
+    # ── Datasets ──
+    logger.info("Cargando dataset train_val...")
+    full_trainval = NoiseHeatmapDataset(
+        imgs_dir=str(train_imgs_dir),
+        heatmaps_dir=str(train_heatmaps_dir),
+        input_size=(288, 384),
+        augment=args.augment,
+        num_brightness_augs=args.num_brightness_augs
+    )
+    logger.info(
+        f"Train_val: {full_trainval._n_valid}/{full_trainval._n_total_original} pares válidos "
+        f"({100*full_trainval._n_valid/full_trainval._n_total_original:.1f}%)"
+    )
+
+    # Aplicar subsampling si se especifica
+    if args.data_subset is not None:
+        logger.info(f"Aplicando subsampling: {args.data_subset*100:.1f}% de train_val")
+        full_trainval = subsample_dataset(full_trainval, args.data_subset, seed=args.seed)
+        logger.info(f"Train_val tras subsampling: {len(full_trainval)} samples")
+
+    n_total = len(full_trainval)
+    n_val = int(args.val_split * n_total)
+    n_train = n_total - n_val
+    logger.info(f"Total train_val: {n_total} → train: {n_train}, val: {n_val}")
+
+    generator = torch.Generator().manual_seed(args.seed)
+    train_dataset, val_dataset = random_split(full_trainval, [n_train, n_val], generator=generator)
+
+    logger.info("Cargando dataset test...")
+    full_test = NoiseHeatmapDataset(
+        imgs_dir=str(test_imgs_dir),
+        heatmaps_dir=str(test_heatmaps_dir),
+        input_size=(288, 384),
+        augment=False  # No augment en test
+    )
+
+    logger.info(
+        f"Test: {full_test._n_valid}/{full_test._n_total_original} pares válidos "
+        f"({100*full_test._n_valid/full_test._n_total_original:.1f}%)"
+    )
     
-    HAND_KEYPOINTS = [17, 18, 19, 20, 21, 22]
+    # Aplicar subsampling a test si se especifica
+    if args.data_subset is not None:
+        logger.info(f"Aplicando subsampling: {args.data_subset*100:.1f}% de test")
+        test_dataset = subsample_dataset(full_test, args.data_subset, seed=args.seed)
+        logger.info(f"Test tras subsampling: {len(test_dataset)} samples")
+    else:
+        test_dataset = full_test
     
-    # Crear carpetas de salida
-    output_root = Path(args.output_root)
-    npy_root = output_root / 'heatmaps'
-    img_root = output_root / 'images'
+    logger.info(f"Total test: {len(test_dataset)}")
+
+    num_workers = 10
+    train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True,
+                              num_workers=num_workers, pin_memory=True, persistent_workers=True,
+                              prefetch_factor=4 )
     
-    for split in ['train_val', 'test']:
-        (npy_root / split).mkdir(parents=True, exist_ok=True)
-        (img_root / split).mkdir(parents=True, exist_ok=True)
+    val_loader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False,
+                            num_workers=num_workers, pin_memory=True, persistent_workers=True,
+                            prefetch_factor=4)
     
-    # Cargar modelo
-    print(f"Cargando modelo en {args.device}...")
-    model = load_hrnet_model(args.model_path, args.device)
+    test_loader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False,
+                             num_workers=num_workers, pin_memory=True, persistent_workers=True,
+                             prefetch_factor=4)
+
+    # ── Modelo ──
+    logger.info("Inicializando modelo con 23 keypoints...")
+    model = PoseHRNet(width=48, num_joints=23)
     
-    # Recolectar pares para ambos splits
-    all_pairs = []
-    for split in ['train_val', 'test']:
-        pairs = collect_csv_image_pairs(args.csv_root, args.img_root, split)
-        all_pairs.extend(pairs)
-        print(f"Split {split}: {len(pairs)} pares encontrados")
+    if Path(args.model_path).exists():
+        model = load_pretrained_and_extend(
+            model, args.model_path, device, num_old_joints=17, num_new_joints=23
+        )
+    else:
+        logger.warning(f"No se encontró {args.model_path}. Entrenando desde cero.")
     
-    # Filtrar pares ya procesados si no se usa --overwrite
-    if not args.overwrite:
-        filtered_pairs = []
-        for pair in all_pairs:
-            npy_output_path = npy_root / pair['split'] / f"{pair['basename']}.npy"
-            img_output_path = img_root / pair['split'] / f"{pair['basename']}.png"
-            
-            if not (npy_output_path.exists() and img_output_path.exists()):
-                filtered_pairs.append(pair)
-        
-        skipped = len(all_pairs) - len(filtered_pairs)
-        print(f"Modo continuar: {len(filtered_pairs)} a procesar, {skipped} ya existen")
-        all_pairs = filtered_pairs
+    # Congelar backbone parcialmente
+    freeze_backbone_partial(model, freeze_until=args.freeze_until)
     
-    if len(all_pairs) == 0:
-        print("No hay pares para procesar")
-        return
+    model = model.to(device)
+    if use_parallel:
+        model = nn.DataParallel(model, device_ids=args.gpus)
+        logger.info(f"Modelo envuelto en DataParallel")
+
+    # ── Loss y Optimizer ──
+    criterion = nn.MSELoss()
     
-    print(f"Total: {len(all_pairs)} pares a procesar")
+    # Grupos de parámetros con LR diferenciados
+    raw_model = model.module if isinstance(model, nn.DataParallel) else model
     
+    stage4_params = []
+    head_params = []
+    
+    for name, param in raw_model.named_parameters():
+        if not param.requires_grad:
+            continue
+        if 'stage4' in name:
+            stage4_params.append(param)
+        elif 'final_layer' in name:
+            head_params.append(param)
+    
+    optimizer = torch.optim.Adam([
+        {'params': stage4_params, 'lr': args.lr_backbone},
+        {'params': head_params, 'lr': args.lr_head}
+    ])
+    
+    logger.info(f"Optimizer: stage4 LR={args.lr_backbone}, head LR={args.lr_head}")
+
+    # ── Variables de seguimiento ──
+    stats = []
+    best_val_loss = float('inf')
+    patience_counter = 0
+    output_path = Path(args.output_model)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    stats_path = Path(args.output_stats)
+    stats_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Contexto para notificaciones
+    gpu_context = f"GPUs {args.gpus} | " if args.gpus else ""
+    context_str = f"{gpu_context}BS={args.batch_size} LR={args.lr_head}\n"
+
     # Notificar inicio
     if use_telegram:
+        subset_info = f"Subset: {args.data_subset*100:.1f}%\n" if args.data_subset else ""
+        gpu_info = f"GPUs: {args.gpus}\n" if args.gpus else "GPU: CPU\n"
+        
         send_telegram(
-            f"🚀 <b>Iniciando procesamiento</b>\n"
-            f"Total: {len(all_pairs)} muestras\n"
-            f"Batch size: {args.batch_size}\n"
-            f"Device: {args.device}",
+            f"🚀 <b>Inicio Fine-Tuning HRNet 23kp</b>\n"
+            f"──────────────────────\n"
+            f"{gpu_info}"
+            f"Train: {n_train}, Val: {n_val}, Test: {len(test_dataset)}\n"
+            f"{subset_info}"
+            f"──────────────────────\n"
+            f"<b>Hyperparams:</b>\n"
+            f"• Batch size: {args.batch_size}\n"
+            f"• Épocas: {args.epochs}\n"
+            f"• LR backbone: {args.lr_backbone}\n"
+            f"• LR head: {args.lr_head}\n"
+            f"• Alpha: {args.alpha}\n"
+            f"• Val split: {args.val_split}\n"
+            f"• Freeze until: {args.freeze_until}\n"
+            f"• Augment: {args.augment}\n"
+            f"• Brightness augs: {args.num_brightness_augs}\n"
+            f"• Early stopping: {args.early_stopping}\n"
+            f"• Seed: {args.seed}",
             token=telegram_token,
             chat_id=telegram_chat_id
         )
-    
-    # Procesar en batches
-    i = 0
-    total_processed = 0
-    notification_interval = max(100, len(all_pairs) // 10)  # Notificar cada 10% o mínimo cada 100
-    
-    with tqdm(total=len(all_pairs), desc="Procesando") as pbar:
-        while i < len(all_pairs):
-            batch_pairs = all_pairs[i:i + args.batch_size]
+
+    # ── Bucle de entrenamiento ──
+    logger.info("Comenzando el entrenamiento...")
+    for epoch in range(args.epochs):
+        # ── Train ──
+        model.train()
+        running_loss = 0.0
+        running_loss_old = 0.0
+        running_loss_new = 0.0
+        running_pck = 0.0
+        n_batches_train = 0
+        
+        progress_bar = tqdm(train_loader, desc=f"Época {epoch + 1}/{args.epochs} [train]")
+        for images, heatmaps in progress_bar:
+            images = images.to(device, non_blocking=True)
+            heatmaps = heatmaps.to(device, non_blocking=True)
+
+            outputs = model(images)
             
-            # Cargar imágenes y CSVs del batch
-            batch_images_bgr = []
-            batch_images_288x384 = []
-            batch_tensors = []
-            batch_dfs = []
+            # Loss ponderada
+            loss_old = criterion(outputs[:, :17], heatmaps[:, :17])
+            loss_new = criterion(outputs[:, 17:], heatmaps[:, 17:])
+            loss = loss_old + args.alpha * loss_new
+
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+
+            # Métricas
+            with torch.no_grad():
+                pck = compute_pck(outputs, heatmaps, threshold=0.05)
             
-            for pair in batch_pairs:
-                img_bgr = cv2.imread(str(pair['img_path']))
-                tensor, img_288x384 = preprocess_image_hrnet(img_bgr)
-                df = pd.read_csv(pair['csv_path'])
+            running_loss += loss.item()
+            running_loss_old += loss_old.item()
+            running_loss_new += loss_new.item()
+            running_pck += pck
+            n_batches_train += 1
+            
+            progress_bar.set_postfix({
+                'loss': f'{loss.item():.6f}',
+                'pck': f'{pck:.2f}%'
+            })
+
+        avg_train_loss = running_loss / n_batches_train
+        avg_train_loss_old = running_loss_old / n_batches_train
+        avg_train_loss_new = running_loss_new / n_batches_train
+        avg_train_pck = running_pck / n_batches_train
+
+        # ── Validation ──
+        avg_val_loss, avg_val_pck, avg_val_loss_old, avg_val_loss_new = evaluate(
+            model, val_loader, criterion, device, alpha=args.alpha
+        )
+
+        logger.info(
+            f"Época [{epoch + 1}/{args.epochs}] — "
+            f"Train Loss: {avg_train_loss:.6f} (old={avg_train_loss_old:.6f}, new={avg_train_loss_new:.6f}) | "
+            f"Train PCK: {avg_train_pck:.2f}% | "
+            f"Val Loss: {avg_val_loss:.6f} (old={avg_val_loss_old:.6f}, new={avg_val_loss_new:.6f}) | "
+            f"Val PCK: {avg_val_pck:.2f}%"
+        )
+
+        # ── Test (cada época) ──
+        avg_test_loss, avg_test_pck, avg_test_loss_old, avg_test_loss_new = evaluate(
+            model, test_loader, criterion, device, alpha=args.alpha
+        )
+        
+        logger.info(
+            f"  Test Loss: {avg_test_loss:.6f} | Test PCK: {avg_test_pck:.2f}%"
+        )
+
+        # ── Guardar estadísticas ──
+        stats.append({
+            'epoch': epoch + 1,
+            'train_loss': avg_train_loss,
+            'train_loss_old': avg_train_loss_old,
+            'train_loss_new': avg_train_loss_new,
+            'train_acc': avg_train_pck,
+            'val_loss': avg_val_loss,
+            'val_loss_old': avg_val_loss_old,
+            'val_loss_new': avg_val_loss_new,
+            'val_acc': avg_val_pck,
+            'test_loss': avg_test_loss,
+            'test_loss_old': avg_test_loss_old,
+            'test_loss_new': avg_test_loss_new,
+            'test_acc': avg_test_pck,
+        })
+
+          # ── Guardar CSV incremental ──
+        with open(stats_path, 'w', newline='', encoding='utf-8') as f:
+            fieldnames = ['epoch', 'train_loss', 'train_loss_old', 'train_loss_new', 'train_acc',
+                          'val_loss', 'val_loss_old', 'val_loss_new', 'val_acc',
+                          'test_loss', 'test_loss_old', 'test_loss_new', 'test_acc']
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerows(stats)
+        logger.info(f"Estadísticas guardadas en: {stats_path}")
+
+        # ── Checkpoint si mejora val_loss ──
+        if avg_val_loss < best_val_loss:
+            improvement = best_val_loss - avg_val_loss
+            best_val_loss = avg_val_loss
+            patience_counter = 0
+            
+            raw_model_to_save = model.module if isinstance(model, nn.DataParallel) else model
+            torch.save({
+                'epoch': epoch + 1,
+                'state_dict': raw_model_to_save.state_dict(),
+                'optimizer': optimizer.state_dict(),
+                'val_loss': avg_val_loss,
+                'val_acc': avg_val_pck,
+            }, str(output_path))
+            
+            logger.info(f"  → Mejor modelo guardado (val_loss={best_val_loss:.6f}, mejora={improvement:.6f})")
+            
+            # Notificación Telegram con visualizaciones
+            if use_telegram:
+                # Generar visualizaciones sobre imágenes de test
+                logger.info("Generando visualizaciones para Telegram...")
+                vis_images = visualize_predictions(
+                    model=raw_model_to_save,
+                    dataset=test_dataset,
+                    device=device,
+                    indices=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9],  # Siempre las mismas 10 imágenes
+                    input_size=(288, 384)
+                )
+
+                collage, collage_path = save_epoch_visualizations(
+                    vis_images,
+                    output_dir=Path(args.output_model).parent / "visualizations",
+                    epoch=epoch + 1
+                )
+                logger.info(f"Visualizaciones guardadas en: {collage_path.parent}")
                 
-                batch_images_bgr.append(img_bgr)
-                batch_images_288x384.append(img_288x384)
-                batch_tensors.append(tensor)
-                batch_dfs.append(df)
-            
-            # Procesar batch con HRNet
-            hrnet_heatmaps_batch = process_batch(model, batch_tensors, args.device)
-            
-            # Procesar cada muestra del batch
-            for j, pair in enumerate(batch_pairs):
-                hrnet_heatmaps = hrnet_heatmaps_batch[j]
-                heatmap_h, heatmap_w = hrnet_heatmaps.shape[1], hrnet_heatmaps.shape[2]
-                
-                # Crear heatmaps MediaPipe
-                mediapipe_heatmaps = create_mediapipe_heatmaps(
-                    batch_dfs[j], HAND_KEYPOINTS, (heatmap_h, heatmap_w)
+                msg = (
+                    f"🏆 <b>Nuevo mejor modelo</b>\n"
+                    f"{context_str}"
+                    f"Val Loss: <b>{avg_val_loss:.6f}</b> (-{improvement:.6f})\n"
+                    f"Val Acc: {avg_val_pck:.2f}%\n"
+                    f"Época: {epoch + 1}"
                 )
                 
-                # Combinar heatmaps
-                combined_heatmaps = np.concatenate([hrnet_heatmaps, mediapipe_heatmaps], axis=0)
-                
-                # Guardar .npy
-                npy_output_path = npy_root / pair['split'] / f"{pair['basename']}.npy"
-                np.save(npy_output_path, combined_heatmaps)
-                
-                # Guardar imagen 288x384
-                img_output_path = img_root / pair['split'] / f"{pair['basename']}.png"
-                cv2.imwrite(str(img_output_path), batch_images_288x384[j])
-                
-                total_processed += 1
-            
-            i += args.batch_size
-            pbar.update(len(batch_pairs))
-            
-            # Notificar progreso periódicamente
-            if use_telegram and total_processed % notification_interval == 0:
-                notify_progress(
-                    total_processed,
-                    len(all_pairs),
-                    "heatmaps",
+                send_telegram_with_images(
+                    message=msg,
+                    collage=collage,
                     token=telegram_token,
                     chat_id=telegram_chat_id
                 )
+        else:
+            patience_counter += 1
+            logger.info(
+                f"  → Sin mejora en val_loss. "
+                f"Paciencia: {patience_counter}/{args.early_stopping}"
+            )
+            if patience_counter >= args.early_stopping:
+                logger.info("Early stopping activado. Finalizando entrenamiento.")
+                break
+
+
+    # ── Evaluación final en test con mejor modelo ──
+    logger.info("Evaluando el mejor modelo en test...")
+    try:
+        best_ckpt = torch.load(str(output_path), map_location=device, weights_only=False)
+    except TypeError:
+        best_ckpt = torch.load(str(output_path), map_location=device)
     
-    # Notificar finalización
+    raw_model_final = model.module if isinstance(model, nn.DataParallel) else model
+    raw_model_final.load_state_dict(best_ckpt['state_dict'])
+    
+    final_test_loss, final_test_pck, _, _ = evaluate(
+        raw_model_final, test_loader, criterion, device, alpha=args.alpha
+    )
+    logger.info(f"Test Loss (mejor modelo): {final_test_loss:.6f} | PCK: {final_test_pck:.2f}%")
+
+    # Notificación final
     if use_telegram:
-        skipped = len(collect_csv_image_pairs(args.csv_root, args.img_root, 'train_val')) + \
-                  len(collect_csv_image_pairs(args.csv_root, args.img_root, 'test')) - len(all_pairs)
-        notify_completion(
-            total_processed,
-            skipped if not args.overwrite else 0,
+        send_telegram(
+            f"✅ <b>Entrenamiento finalizado</b>\n"
+            f"Mejor Val Loss: {best_val_loss:.6f}\n"
+            f"Test Loss: {final_test_loss:.6f}\n"
+            f"Test PCK: {final_test_pck:.2f}%",
             token=telegram_token,
             chat_id=telegram_chat_id
         )
-    
-    print("Procesamiento completado")
+
+    logger.info("✅ Proceso finalizado.")
 
 
 if __name__ == '__main__':
