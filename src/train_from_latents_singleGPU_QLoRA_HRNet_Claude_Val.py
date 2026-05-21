@@ -579,12 +579,12 @@ def latents_to_pil(
         pils.append(T.ToPILImage()(img_t))
     return pils
 
-
 def latents_to_images(
     latents_packed: torch.Tensor,
     vae: AutoencoderKLQwenImage,
     img_height: int,
     img_width: int,
+    with_grad: bool = False,       # ← nuevo parámetro
 ) -> torch.Tensor:
     """Desnormaliza + decodifica latentes empaquetados a tensor de imágenes."""
     spatial = unpack_latents(latents_packed.float(), img_height, img_width).to(vae.dtype)
@@ -595,11 +595,36 @@ def latents_to_images(
         1, vae.config.z_dim, 1, 1, 1).to(spatial.device, spatial.dtype)
     z_raw = spatial * vae_std + vae_mean
 
-    with torch.no_grad():
+    if with_grad:
         decoded = vae.decode(z_raw, return_dict=False)[0]
+    else:
+        with torch.no_grad():
+            decoded = vae.decode(z_raw, return_dict=False)[0]
     decoded = decoded[:, :, 0]
     
     return decoded
+
+
+# def latents_to_images(  # antigua versión sin opción de gradientes
+#     latents_packed: torch.Tensor,
+#     vae: AutoencoderKLQwenImage,
+#     img_height: int,
+#     img_width: int,
+# ) -> torch.Tensor:
+#     """Desnormaliza + decodifica latentes empaquetados a tensor de imágenes."""
+#     spatial = unpack_latents(latents_packed.float(), img_height, img_width).to(vae.dtype)
+
+#     vae_mean = torch.tensor(vae.config.latents_mean).view(
+#         1, vae.config.z_dim, 1, 1, 1).to(spatial.device, spatial.dtype)
+#     vae_std  = torch.tensor(vae.config.latents_std).view(
+#         1, vae.config.z_dim, 1, 1, 1).to(spatial.device, spatial.dtype)
+#     z_raw = spatial * vae_std + vae_mean
+
+#     with torch.no_grad():
+#         decoded = vae.decode(z_raw, return_dict=False)[0]
+#     decoded = decoded[:, :, 0]
+    
+#     return decoded
 
 
 def preprocess_image_for_hrnet(
@@ -754,7 +779,8 @@ class CombinedLossFn:
                     x0_pred,
                     self.vae,
                     self.img_height,
-                    self.img_width
+                    self.img_width,
+                    with_grad=True  
                 )
                 
                 hrnet_input = preprocess_image_for_hrnet(
@@ -762,8 +788,8 @@ class CombinedLossFn:
                     self.hrnet_input_size
                 )
                 
-                with torch.no_grad():
-                    pred_heatmaps = self.hrnet(hrnet_input)
+                # with torch.no_grad(): # ← SÍ queremos gradientes para el HRNet para que la pérdida de heatmap influya en el entrenamiento
+                pred_heatmaps = self.hrnet(hrnet_input)
                 
                 target_hm = self.current_target_heatmaps.to(device).float()
                 
@@ -1391,6 +1417,39 @@ def main():
             loss = loss_fn(v_pred, combined_target)
 
             loss.backward()
+
+            # Para revisar los gradientes antes de clipping ####################################################
+            total_grad = sum(
+                    p.grad.abs().sum().item()
+                    for p in model.parameters()
+                    if p.requires_grad and p.grad is not None
+            )
+            params_con_grad = sum(
+                    1 for p in model.parameters()
+                    if p.requires_grad and p.grad is not None and p.grad.abs().sum().item() > 0
+            )
+            total_params = sum(1 for p in model.parameters() if p.requires_grad)
+
+            mem_allocated = torch.cuda.memory_allocated(device) / 1e9
+            mem_reserved  = torch.cuda.memory_reserved(device) / 1e9
+            mem_peak      = torch.cuda.max_memory_allocated(device) / 1e9
+
+            logger.info(
+                    f"[Epoch {epoch} Step {step}] "
+                    f"Suma gradientes: {total_grad:.6f} | "
+                    f"Params con grad≠0: {params_con_grad}/{total_params} | "
+                    f"VRAM usada: {mem_allocated:.2f}GB | "
+                    f"VRAM reservada: {mem_reserved:.2f}GB | "
+                    f"VRAM pico: {mem_peak:.2f}GB"
+            )
+
+            # Resetear el pico para el siguiente epoch
+            torch.cuda.reset_peak_memory_stats(device)
+
+
+
+            ####################################################################################################
+
             torch.nn.utils.clip_grad_norm_(
                 [p for p in model.parameters() if p.requires_grad],
                 max_norm=1.0
