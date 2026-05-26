@@ -1,6 +1,7 @@
+import json
 import logging
 from pathlib import Path
-from typing import Tuple
+from typing import Dict, List, Tuple
 
 import numpy as np
 import torch
@@ -10,60 +11,107 @@ from torch.utils.data import Dataset, DataLoader, Subset
 logger = logging.getLogger(__name__)
 
 
-class LatentsDataset(Dataset):
-    def __init__(self, latents_dir, split="train"):
-        self.split_dir = Path(latents_dir) / split
-        self.files = sorted(list(self.split_dir.glob("*.pt")))
-        if len(self.files) == 0:
-            logger.warning(f"No files found in {self.split_dir}")
+class LatentsDatasetFromJSON(Dataset):
+    """
+    Dataset que carga .pt a partir de un JSON de experimento.
+    Cada timestamp del JSON puede tener hasta 6 .pt asociados.
+    Train y val comparten el mismo índice (carpetas train/ y val/ se tratan como una sola).
+    Test se busca exclusivamente en la carpeta test/.
+    """
 
-        logger.info(f"Scanning {len(self.files)} files to compute global_max_seq_len...")
+    def __init__(self, latents_dir: str, timestamps: List[int], split: str = "train"):
+        self.latents_dir = Path(latents_dir)
+        self.split = split
+
+        # Construir índice timestamp → [.pt paths]
+        self.ts_index = self._build_index(split)
+
+        # Expandir timestamps a lista de .pt files
+        self.files = []
+        missing_ts = 0
+        for ts in timestamps:
+            pts = self.ts_index.get(ts, [])
+            if not pts:
+                missing_ts += 1
+            self.files.extend(pts)
+
+        if missing_ts > 0:
+            logger.warning(f"[{split}] {missing_ts} timestamps sin .pt encontrado")
+
+        # Calcular global_max_seq_len
+        logger.info(f"[{split}] {len(self.files)} .pt files para {len(timestamps)} timestamps")
+        logger.info(f"[{split}] Calculando global_max_seq_len...")
         self.global_max_seq_len = 0
         for f in self.files:
             data = torch.load(f, weights_only=True)
             seq_len = data["prompt_embeds"].shape[1]
             if seq_len > self.global_max_seq_len:
                 self.global_max_seq_len = seq_len
-        logger.info(f"global_max_seq_len = {self.global_max_seq_len}")
+        logger.info(f"[{split}] global_max_seq_len = {self.global_max_seq_len}")
 
-    def __len__(self):
+    def _build_index(self, split: str) -> Dict[int, List[Path]]:
+        """Escanea los directorios correspondientes y construye timestamp → [paths]."""
+        index = {}
+
+        if split == "test":
+            dirs_to_scan = [self.latents_dir / "test"]
+        else:
+            # train y val comparten carpetas
+            dirs_to_scan = [
+                self.latents_dir / "train",
+                self.latents_dir / "val",
+            ]
+
+        for scan_dir in dirs_to_scan:
+            if not scan_dir.exists():
+                logger.warning(f"Directorio no encontrado: {scan_dir}")
+                continue
+            for pt_path in scan_dir.glob("*.pt"):
+                try:
+                    data = torch.load(pt_path, map_location="cpu", weights_only=False)
+                    ts = data.get("timestamp")
+                    if ts is not None:
+                        ts = int(ts)
+                        if ts not in index:
+                            index[ts] = []
+                        index[ts].append(pt_path)
+                except Exception as e:
+                    logger.warning(f"Error leyendo {pt_path}: {e}")
+
+        logger.info(f"[{split}] Índice construido: {len(index)} timestamps únicos")
+        return index
+
+    def __len__(self) -> int:
         return len(self.files)
 
-    def __getitem__(self, idx):
+    def __getitem__(self, idx: int):
         return torch.load(self.files[idx], weights_only=True)
 
 
-def create_train_val_split(dataset: Dataset, val_split: float, seed: int = 42) -> Tuple[Subset, Subset]:
+
+def load_experiment_json(experiment_json: str) -> Tuple[List[int], List[int], List[int]]:
     """
-    NUEVO V1: Crea splits train/val reproducibles con semilla fija.
-
-    Args:
-        dataset: Dataset completo
-        val_split: Fracción de datos para validación (0.0-1.0)
-        seed: Semilla para reproducibilidad
-
-    Returns:
-        train_subset, val_subset
+    Lee el JSON de experimento y devuelve (train_timestamps, val_timestamps, test_timestamps).
+    Cada timestamp aparece una vez aunque tenga 6 .pt asociados; el dataset los expande.
     """
-    dataset_size = len(dataset)
-    indices = list(range(dataset_size))
+    with open(experiment_json) as f:
+        exp = json.load(f)
 
-    # Mezclar con semilla fija para reproducibilidad
-    np.random.seed(seed)
-    np.random.shuffle(indices)
+    def extract_timestamps(split_list):
+        ts = []
+        for user in split_list:
+            ts.extend(user["timestamps"])
+        return ts
 
-    # Calcular punto de split
-    split_idx = int(np.floor(val_split * dataset_size))
+    train_ts = extract_timestamps(exp.get("train", []))
+    val_ts   = extract_timestamps(exp.get("val",   []))
+    test_ts  = extract_timestamps(exp.get("test",  []))
 
-    train_indices = indices[split_idx:]
-    val_indices = indices[:split_idx]
+    logger.info(f"Experimento: {exp.get('name', 'sin nombre')}")
+    logger.info(f"Descripción: {exp.get('description', '')}")
+    logger.info(f"Timestamps → train: {len(train_ts)} | val: {len(val_ts)} | test: {len(test_ts)}")
 
-    train_subset = Subset(dataset, train_indices)
-    val_subset = Subset(dataset, val_indices)
-
-    logger.info(f"✓ Dataset split (seed={seed}): {len(train_subset)} train, {len(val_subset)} val")
-
-    return train_subset, val_subset
+    return train_ts, val_ts, test_ts
 
 
 def make_collate_latents(global_max_seq_len: int):
@@ -103,3 +151,52 @@ def make_collate_latents(global_max_seq_len: int):
             "target_heatmaps":       target_heatmaps,
         }
     return collate_latents
+
+def build_dataloaders(config):
+    """Construye datasets y dataloaders desde el JSON de experimento."""
+    train_ts, val_ts, test_ts = load_experiment_json(config.experiment_json)
+
+    train_dataset = LatentsDatasetFromJSON(config.latents_dir, train_ts, split="train")
+    val_dataset   = LatentsDatasetFromJSON(config.latents_dir, val_ts,   split="val")
+    test_dataset  = LatentsDatasetFromJSON(config.latents_dir, test_ts,  split="test")
+
+    # global_max_seq_len unificado entre los tres splits
+    global_max_seq_len = max(
+        train_dataset.global_max_seq_len,
+        val_dataset.global_max_seq_len,
+        test_dataset.global_max_seq_len,
+    )
+    logger.info(f"global_max_seq_len unificado: {global_max_seq_len}")
+
+    collate_fn = make_collate_latents(global_max_seq_len)
+
+    g = torch.Generator()
+    g.manual_seed(42)
+
+    train_dataloader = DataLoader(
+        train_dataset,
+        batch_size=config.batch_size,
+        collate_fn=collate_fn,
+        drop_last=True,
+        shuffle=True,
+        generator=g,
+        num_workers=4,
+    )
+    val_dataloader = DataLoader(
+        val_dataset,
+        batch_size=config.batch_size,
+        collate_fn=collate_fn,
+        drop_last=False,
+        shuffle=False,
+        num_workers=4,
+    )
+    test_dataloader = DataLoader(
+        test_dataset,
+        batch_size=config.batch_size,
+        collate_fn=collate_fn,
+        drop_last=False,
+        shuffle=False,
+        num_workers=4,
+    )
+
+    return train_dataset, val_dataset, test_dataset, train_dataloader, val_dataloader, test_dataloader

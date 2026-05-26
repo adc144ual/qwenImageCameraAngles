@@ -8,14 +8,14 @@ class TrainingConfig:
     output_dir: str = "../models/finetuned_pp"
     base_model: str = "Qwen/Qwen-Image-Edit-2509"
     transformer_model: str = "../models/Qwen-Fused-Angles"
+    experiment_json: str = "" # JSON de experimento con timestamps de train/val/test
 
     # Configuración HRNet
     hrnet_model_path: str = "./models/pose_hrnet_w48_384x288.pth"
     hrnet_input_size: Tuple[int, int] = (288, 384)
 
     epochs: int = 3
-    batch_size: int = 4
-    microbatches: int = 4
+    batch_size: int = 2
     lr: float = 1e-4
     lora_rank: int = 16
     lora_alpha: int = 32
@@ -29,7 +29,3 @@ class TrainingConfig:
     velocity_loss_weight: float = 0.5
     heatmap_loss_weight: float = 0.5
     heatmap_loss_type: str = "mse"
-
-    # NUEVO V1: Configuración de validación
-    val_split: float = 0.1  # Porcentaje de datos para validación
-    val_seed: int = 42      # Semilla para split reproducible

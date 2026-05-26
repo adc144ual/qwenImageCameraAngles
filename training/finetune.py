@@ -60,7 +60,7 @@ Usage:
  python train.py --latents_dir "/data/antoniodetoro/qwen/dataset_local_latents_512_heatmaps/" --hrnet_model_path /nas/antoniodetoro/qwen/Qwen-Image-Edit-Angles-2/src/hr_net/models/hrnet_finetuned_best.pth --output_dir output_qwen_HRNet_single_GPU --batch_size 2 --epochs 20 --heatmap_loss_weight 0.5 --velocity_loss_weight 0.5 --heatmap_loss_type "mse"
 
 """
-
+# train.py
 import os
 import sys
 import csv
@@ -70,7 +70,7 @@ import logging
 current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.dirname(current_dir)
 sys.path.append(parent_dir)
-sys.path.append(current_dir)  # Para importar los módulos locales
+sys.path.append(current_dir)
 
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 os.environ["HF_HOME"] = "/nas/antoniodetoro/qwen/hf_cache"
@@ -86,7 +86,7 @@ from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
 from transformers import BitsAndBytesConfig
 
 from config import TrainingConfig
-from dataset import LatentsDataset, create_train_val_split, make_collate_latents
+from dataset import build_dataloaders
 from hrnet import load_hrnet_model
 from inference import run_inference_callback
 from loss import CombinedLossFn
@@ -94,11 +94,7 @@ from model import QwenSingleGPUWrapper
 from validate import validate
 
 
-logging.basicConfig(
-    level=logging.INFO,
-    force=True,
-    format="%(message)s",
-)
+logging.basicConfig(level=logging.INFO, force=True, format="%(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -108,49 +104,42 @@ logger = logging.getLogger(__name__)
 
 def parse_args() -> TrainingConfig:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--latents_dir", type=str, required=True)
-    parser.add_argument("--output_dir", type=str, default="../models/finetuned_pp")
-    parser.add_argument("--base_model", type=str, default="Qwen/Qwen-Image-Edit-2509")
+    parser.add_argument("--latents_dir",       type=str, required=True)
+    parser.add_argument("--experiment_json",   type=str, required=True)
+    parser.add_argument("--output_dir",        type=str, default="../models/finetuned_pp")
+    parser.add_argument("--base_model",        type=str, default="Qwen/Qwen-Image-Edit-2509")
     parser.add_argument("--transformer_model", type=str, default="../models/Qwen-Fused-Angles")
-
-    # HRNet
-    parser.add_argument("--hrnet_model_path", type=str, default="./models/pose_hrnet_w48_384x288.pth")
-    parser.add_argument("--heatmap_loss_weight", type=float, default=0.5)
+    
+    #HRNet
+    parser.add_argument("--hrnet_model_path",  type=str, default="./models/pose_hrnet_w48_384x288.pth")
+    parser.add_argument("--heatmap_loss_weight",  type=float, default=0.5)
     parser.add_argument("--velocity_loss_weight", type=float, default=0.5)
     parser.add_argument("--heatmap_loss_type", type=str, default="mse", choices=["mse", "weighted_mse"])
-
-    # Training
-    parser.add_argument("--epochs", type=int, default=3)
-    parser.add_argument("--batch_size", type=int, default=4)
-    parser.add_argument("--microbatches", type=int, default=4)
-    parser.add_argument("--learning_rate", type=float, default=1e-4)
-    parser.add_argument("--lora_rank", type=int, default=16)
-    parser.add_argument("--lora_alpha", type=int, default=32)
-    parser.add_argument("--lora_dropout", type=float, default=0.1)
-    parser.add_argument("--inference_every", type=int, default=2)
-    parser.add_argument("--inference_steps", type=int, default=4)
-    parser.add_argument("--inference_samples", type=int, default=1)
-
-    # NUEVO V4: Validación
-    parser.add_argument("--val_split", type=float, default=0.1,
-                        help="Fracción de datos para validación (0.0-1.0)")
-    parser.add_argument("--val_seed", type=int, default=42,
-                        help="Semilla para split train/val reproducible")
-
+    
+    #Training
+    parser.add_argument("--epochs",            type=int,   default=3)
+    parser.add_argument("--batch_size",        type=int,   default=4)
+    parser.add_argument("--learning_rate",     type=float, default=1e-4)
+    parser.add_argument("--lora_rank",         type=int,   default=16)
+    parser.add_argument("--lora_alpha",        type=int,   default=32)
+    parser.add_argument("--lora_dropout",      type=float, default=0.1)
+    parser.add_argument("--inference_every",   type=int,   default=2)
+    parser.add_argument("--inference_steps",   type=int,   default=4)
+    parser.add_argument("--inference_samples", type=int,   default=5)
     args, _ = parser.parse_known_args()
 
     return TrainingConfig(
         latents_dir=args.latents_dir,
+        experiment_json=args.experiment_json,
         output_dir=args.output_dir,
-        transformer_model=args.transformer_model,
         base_model=args.base_model,
+        transformer_model=args.transformer_model,
         hrnet_model_path=args.hrnet_model_path,
         velocity_loss_weight=args.velocity_loss_weight,
         heatmap_loss_weight=args.heatmap_loss_weight,
         heatmap_loss_type=args.heatmap_loss_type,
         epochs=args.epochs,
         batch_size=args.batch_size,
-        microbatches=args.microbatches,
         lr=args.learning_rate,
         lora_rank=args.lora_rank,
         lora_alpha=args.lora_alpha,
@@ -158,24 +147,20 @@ def parse_args() -> TrainingConfig:
         inference_every=args.inference_every,
         inference_steps=args.inference_steps,
         inference_samples=args.inference_samples,
-        val_split=args.val_split,  # NUEVO V4
-        val_seed=args.val_seed,    # NUEVO V4
     )
 
 
 # ---------------------------------------------------------------------------
-# Setup de modelo, checkpoint, dataloaders y loss
+# Setup de modelo, checkpoints
 # ---------------------------------------------------------------------------
 
 def build_model(config: TrainingConfig, device: torch.device) -> QwenSingleGPUWrapper:
-    """Carga el transformer, aplica QLoRA y devuelve el wrapper."""
     bnb_config = BitsAndBytesConfig(
         load_in_4bit=True,
         bnb_4bit_quant_type="nf4",
         bnb_4bit_compute_dtype=torch.bfloat16,
         bnb_4bit_use_double_quant=True,
     )
-
     logger.info(f"Cargando modelo desde {config.transformer_model} → {device}")
     transformer = QwenImageTransformer2DModel.from_pretrained(
         config.transformer_model,
@@ -185,9 +170,7 @@ def build_model(config: TrainingConfig, device: torch.device) -> QwenSingleGPUWr
         device_map=str(device),
         attn_implementation="sdpa",
     )
-
     transformer = prepare_model_for_kbit_training(transformer, use_gradient_checkpointing=False)
-
     lora_config = LoraConfig(
         r=config.lora_rank,
         lora_alpha=config.lora_alpha,
@@ -198,7 +181,6 @@ def build_model(config: TrainingConfig, device: torch.device) -> QwenSingleGPUWr
     )
     transformer = get_peft_model(transformer, lora_config)
     transformer.print_trainable_parameters()
-
     logger.info("Creando QwenSingleGPUWrapper...")
     return QwenSingleGPUWrapper(transformer)
 
@@ -207,133 +189,67 @@ def load_checkpoint(model: QwenSingleGPUWrapper, config: TrainingConfig, device:
     """Carga checkpoint LoRA si existe. Devuelve (start_epoch, best_loss)."""
     checkpoint_path = os.path.join(config.output_dir, "qwen_lora_best.pt")
     if not os.path.exists(checkpoint_path):
-        logger.info("No se encontró checkpoint previo. Iniciando entrenamiento desde cero.")
+        logger.info("No se encontró checkpoint previo. Iniciando desde cero.")
         return 0, float('inf')
-
-    logger.info(f"Checkpoint detectado en {checkpoint_path}, cargando pesos LoRA...")
     try:
         ckpt = torch.load(checkpoint_path, map_location=device, weights_only=True)
-
-        # Soporte para formato nuevo (dict con metadata) y antiguo (flat dict de tensores)
         if isinstance(ckpt, dict) and "lora_state_dict" in ckpt:
-            lora_state = ckpt["lora_state_dict"]
+            lora_state  = ckpt["lora_state_dict"]
             start_epoch = ckpt.get("epoch", -1) + 1
-            best_loss = ckpt.get("best_loss", float('inf'))
-            logger.info(
-                f"✓ Reanudando desde época {start_epoch} | "
-                f"Mejor val_loss anterior: {best_loss:.6f}"
-            )
+            best_loss   = ckpt.get("best_loss", float('inf'))
+            logger.info(f"✓ Reanudando desde época {start_epoch} | best_loss={best_loss:.6f}")
         else:
-            # Formato antiguo: el checkpoint es directamente el state dict
-            lora_state = ckpt
-            start_epoch = 0
-            best_loss = float('inf')
-            logger.warning(
-                "Checkpoint en formato antiguo (sin metadata). "
-                "Reanudando desde época 0."
-            )
-
+            lora_state, start_epoch, best_loss = ckpt, 0, float('inf')
+            logger.warning("Checkpoint en formato antiguo. Reanudando desde época 0.")
         missing, unexpected = model.load_state_dict(lora_state, strict=False)
-        loaded_keys = len(lora_state) - len(unexpected)
-        logger.info(
-            f"{loaded_keys}/{len(lora_state)} pesos LoRA cargados "
-            f"({len(missing)} faltantes, {len(unexpected)} inesperados)"
-        )
+        logger.info(f"{len(lora_state)-len(unexpected)}/{len(lora_state)} pesos LoRA cargados")
         return start_epoch, best_loss
-
     except Exception as e:
         logger.error(f"Error cargando checkpoint: {e}. Iniciando desde cero.")
         return 0, float('inf')
 
 
-def save_checkpoint(model: QwenSingleGPUWrapper, config: TrainingConfig, epoch: int, best_loss: float):
-    """Guarda los pesos LoRA en disco."""
-    local_lora = {
-        k: v.cpu()
-        for k, v in model.state_dict().items()
-        if "lora" in k
-    }
-    save_path = os.path.join(config.output_dir, "qwen_lora_best.pt")
-    torch.save({
-        "lora_state_dict": local_lora,
-        "epoch": epoch,
-        "best_loss": best_loss,
-    }, save_path)
+def save_checkpoint(model, config, epoch, best_loss):
+    local_lora = {k: v.cpu() for k, v in model.state_dict().items() if "lora" in k}
+    save_path  = os.path.join(config.output_dir, "qwen_lora_best.pt")
+    torch.save({"lora_state_dict": local_lora, "epoch": epoch, "best_loss": best_loss}, save_path)
     logger.info(f"LoRA guardado en: {save_path} (época {epoch}, val_loss={best_loss:.6f})")
 
 
-def build_dataloaders(config: TrainingConfig):
-    """Construye dataset completo, splits y dataloaders. Devuelve todo lo necesario."""
-    g = torch.Generator()
-    g.manual_seed(42)
-
-    full_dataset = LatentsDataset(config.latents_dir)
-
-    # Split reproducible
-    train_dataset, val_dataset = create_train_val_split(
-        full_dataset,
-        val_split=config.val_split,
-        seed=config.val_seed
-    )
-
-    collate_fn = make_collate_latents(full_dataset.global_max_seq_len)
-
-    train_dataloader = DataLoader(
-        train_dataset,
-        batch_size=config.batch_size,
-        collate_fn=collate_fn,
-        drop_last=True,
-        shuffle=True,
-        generator=g,
-        num_workers=4,
-    )
-
-    # NUEVO V1: Val DataLoader (sin shuffle para reproducibilidad)
-    val_dataloader = DataLoader(
-        val_dataset,
-        batch_size=config.batch_size,
-        collate_fn=collate_fn,
-        drop_last=False,  # Usar todos los datos de validación
-        shuffle=False,    # Sin shuffle para reproducibilidad
-        num_workers=4,
-    )
-
-    return full_dataset, train_dataset, val_dataset, train_dataloader, val_dataloader
-
-
-# ---------------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------------
-
 def main():
     config = parse_args()
-
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    dtype = torch.bfloat16
+    dtype  = torch.bfloat16
 
     logger.info(f"Training: 1 GPU ({device}), BS={config.batch_size}")
+    logger.info(f"Experimento: {config.experiment_json}")
     logger.info(f"Heatmap Loss Weight: {config.heatmap_loss_weight}")
+    logger.info(f"Experimento: {config.experiment_json}")
     logger.info(f"Velocity Loss Weight: {config.velocity_loss_weight}")
     logger.info(f"Heatmap Loss Type: {config.heatmap_loss_type}")
-    logger.info(f"Validation Split: {config.val_split} (seed={config.val_seed})")  # NUEVO V4
+
+
     os.makedirs(config.output_dir, exist_ok=True)
 
-    # Modelo
+    #modelo
     model = build_model(config, device)
 
-    # Resume
+    #Resume checkpoint si existe
     start_epoch, best_loss = load_checkpoint(model, config, device)
 
     trainable_params = [p for p in model.parameters() if p.requires_grad]
     logger.info(f"{len(trainable_params)} grupos de parámetros entrenables")
+
+
     optimizer = torch.optim.AdamW(trainable_params, lr=config.lr, eps=1e-6)
 
     diff_scheduler = FlowMatchEulerDiscreteScheduler.from_pretrained(
         config.base_model, subfolder="scheduler"
     )
 
-    # Dataset y dataloaders
-    full_dataset, train_dataset, val_dataset, train_dataloader, val_dataloader = build_dataloaders(config)
+    # Datasets y dataloaders desde JSON de experimento
+    train_dataset, val_dataset, test_dataset, \
+    train_dataloader, val_dataloader, test_dataloader = build_dataloaders(config)
 
     # VAE
     logger.info(f"Cargando VAE en {device}...")
@@ -350,30 +266,28 @@ def main():
         hrnet = load_hrnet_model(config.hrnet_model_path, width=48, num_joints=17, device=device)
         hrnet.requires_grad_(False)
         hrnet.eval()
-        logger.info("HRNet cargado y congelado correctamente")
+        logger.info("HRNet cargado y congelado.")
     else:
-        logger.warning("HRNet no encontrado, solo velocity loss")
+        logger.warning("HRNet no encontrado, solo velocity loss.")
 
-    # Resolución inferida del dataset
-    first_sample = torch.load(full_dataset.files[0], weights_only=True)
+    # Resolución inferida del primer .pt
+    first_sample   = torch.load(train_dataset.files[0], weights_only=True)
     img_resolution = first_sample.get("resolution", 1024)
-    logger.info(f"Resolución inferida del dataset: {img_resolution}")
+    logger.info(f"Resolución: {img_resolution}")
 
-    # Loss
     loss_fn = CombinedLossFn(
-        vae=vae,
-        hrnet=hrnet,
+        vae=vae, hrnet=hrnet,
         hrnet_input_size=config.hrnet_input_size,
-        img_height=img_resolution,
-        img_width=img_resolution,
+        img_height=img_resolution, img_width=img_resolution,
         velocity_weight=config.velocity_loss_weight,
         heatmap_weight=config.heatmap_loss_weight,
         heatmap_loss_type=config.heatmap_loss_type,
-        save_dir=os.path.join(config.output_dir, "loss_diagnostics")
+        save_dir=os.path.join(config.output_dir, "loss_diagnostics"),
     )
 
     logger.info("Listo para entrenar.")
     model.train()
+
 
     # CSV: cabecera solo si empezamos desde cero; si reanudamos, abrimos en modo append
     csv_file_path = os.path.join(config.output_dir, "training_metrics.csv")
@@ -383,17 +297,16 @@ def main():
         if csv_mode == "w":
             writer.writerow(["epoch", "train_loss", "val_loss", "train_pck", "val_pck"])
 
+
     # -------------------------------------------------------------------------
     # Bucle de entrenamiento
     # -------------------------------------------------------------------------
     for epoch in range(start_epoch, config.epochs):
         logger.info(f"Epoch {epoch} start")
+        #TRAINING
 
-        # TRAINING
         iterator = tqdm(train_dataloader, desc=f"Epoch {epoch}")
-        avg_loss = 0.0
-        avg_pck  = 0.0
-        steps = 0
+        avg_loss, avg_pck, steps = 0.0, 0.0, 0
 
         for step, batch in enumerate(iterator):
             optimizer.zero_grad()
@@ -401,27 +314,24 @@ def main():
             target = batch["target_latents_packed"].to(device, dtype=dtype)
             source = batch["source_latents_packed"].to(device, dtype=dtype)
             prompt = batch["prompt_embeds"].to(device, dtype=dtype)
-            mask = batch["prompt_embeds_mask"].to(device)
+            mask   = batch["prompt_embeds_mask"].to(device)
             target_heatmaps = batch["target_heatmaps"]
 
-            bsz = target.shape[0]
-
+            bsz   = target.shape[0]
             g_seed = 42 + epoch * 10000 + step
-            gen = torch.Generator(device=device).manual_seed(g_seed)
+            gen   = torch.Generator(device=device).manual_seed(g_seed)
 
             timesteps = torch.randint(
                 0, diff_scheduler.config.num_train_timesteps,
                 (bsz,), generator=gen, device=device
             ).long()
-
             noise = torch.randn(target.shape, generator=gen, device=device, dtype=dtype)
 
-            t_norm = (timesteps.float() / diff_scheduler.config.num_train_timesteps).to(dtype)
-            t_norm = t_norm.view(-1, 1, 1)
-            noisy = (1.0 - t_norm) * target + t_norm * noise
+            t_norm = (timesteps.float() / diff_scheduler.config.num_train_timesteps).to(dtype).view(-1, 1, 1)
+            noisy  = (1.0 - t_norm) * target + t_norm * noise
 
             velocity_target = noise - target
-            timestep_norm = (timesteps.float() / 1000.0).to(dtype)
+            timestep_norm   = (timesteps.float() / 1000.0).to(dtype)
 
             latent_model_input = torch.cat([noisy, source], dim=1)
             v_pred = model(latent_model_input, prompt, mask, timestep_norm)
@@ -432,92 +342,74 @@ def main():
 
             loss.backward()
 
-            # Para revisar los gradientes antes de clipping ####################################################
+            ####################### Para revisar los gradientes antes de clipping ##############################
             total_grad = sum(
-                    p.grad.abs().sum().item()
-                    for p in model.parameters()
-                    if p.requires_grad and p.grad is not None
+                p.grad.abs().sum().item()
+                for p in model.parameters()
+                if p.requires_grad and p.grad is not None
             )
             params_con_grad = sum(
-                    1 for p in model.parameters()
-                    if p.requires_grad and p.grad is not None and p.grad.abs().sum().item() > 0
+                1 for p in model.parameters()
+                if p.requires_grad and p.grad is not None and p.grad.abs().sum().item() > 0
             )
             total_params = sum(1 for p in model.parameters() if p.requires_grad)
-
             mem_allocated = torch.cuda.memory_allocated(device) / 1e9
             mem_reserved  = torch.cuda.memory_reserved(device) / 1e9
             mem_peak      = torch.cuda.max_memory_allocated(device) / 1e9
-
             logger.info(
-                    f"[Epoch {epoch} Step {step}] "
-                    f"Suma gradientes: {total_grad:.6f} | "
-                    f"Params con grad≠0: {params_con_grad}/{total_params} | "
-                    f"VRAM usada: {mem_allocated:.2f}GB | "
-                    f"VRAM reservada: {mem_reserved:.2f}GB | "
-                    f"VRAM pico: {mem_peak:.2f}GB"
+                f"[Epoch {epoch} Step {step}] "
+                f"Grad: {total_grad:.6f} | Params grad≠0: {params_con_grad}/{total_params} | "
+                f"VRAM: {mem_allocated:.2f}/{mem_reserved:.2f}GB | Peak: {mem_peak:.2f}GB"
             )
 
             # Resetear el pico para el siguiente epoch
             torch.cuda.reset_peak_memory_stats(device)
-            ####################################################################################################
 
+            ####################################################################################################
+            
+            
             torch.nn.utils.clip_grad_norm_(
-                [p for p in model.parameters() if p.requires_grad],
-                max_norm=1.0
+                [p for p in model.parameters() if p.requires_grad], max_norm=1.0
             )
             optimizer.step()
 
-            step_loss = loss.item()
-            avg_loss += step_loss
+            avg_loss += loss.item()
             avg_pck  += loss_fn.last_pck
-            steps += 1
+            steps    += 1
 
-        # NUEVO V2: VALIDATION al final de cada época
+        # Validación
         logger.info("Ejecutando validación...")
         val_loss, val_pck = validate(
-            model=model,
-            val_dataloader=val_dataloader,
-            loss_fn=loss_fn,
-            diff_scheduler=diff_scheduler,
-            device=device,
-            dtype=dtype,
+            model=model, val_dataloader=val_dataloader,
+            loss_fn=loss_fn, diff_scheduler=diff_scheduler,
+            device=device, dtype=dtype,
         )
 
         global_avg_loss = avg_loss / steps if steps > 0 else 0.0
         global_avg_pck  = avg_pck  / steps if steps > 0 else 0.0
 
         logger.info(
-            f"Epoch {epoch} | "
-            f"Train Loss: {global_avg_loss:.6f} | Val Loss: {val_loss:.6f} | "
-            f"Train PCK: {global_avg_pck:.4f} | Val PCK: {val_pck:.4f} | "
-            f"Mejor histórica: {best_loss:.6f}"
+            f"Epoch {epoch} | Train Loss: {global_avg_loss:.6f} | Val Loss: {val_loss:.6f} | "
+            f"Train PCK: {global_avg_pck:.4f} | Val PCK: {val_pck:.4f} | Best: {best_loss:.6f}"
         )
 
-        # NUEVO V3: Escribir train_loss, val_loss, train_pck y val_pck en CSV
         with open(csv_file_path, mode="a", newline="") as f:
-            writer = csv.writer(f)
-            writer.writerow([epoch, global_avg_loss, val_loss, global_avg_pck, val_pck])
+            csv.writer(f).writerow([epoch, global_avg_loss, val_loss, global_avg_pck, val_pck])
 
-        # Checkpoint (usar val_loss en lugar de train_loss)
-        if val_loss < best_loss:  # MODIFICADO V3: usar val_loss
+        if val_loss < best_loss:
             best_loss = val_loss
-            logger.info("🟢 ¡Nueva mejor val_loss! Guardando checkpoint...")
+            logger.info("🟢 Nueva mejor val_loss. Guardando checkpoint...")
             save_checkpoint(model, config, epoch, best_loss)
         else:
-            logger.info("⚪ Val_loss no mejoró. Saltando guardado.")
+            logger.info("⚪ Val_loss no mejoró.")
 
-        # Callback de inferencia
+        # Callback de Inferencia sobre test (no sobre train)
         if config.inference_every > 0 and (epoch + 1) % config.inference_every == 0:
             run_inference_callback(
-                model=model,
-                vae=vae,
-                base_scheduler=diff_scheduler,
-                device=device,
-                dataset=train_dataset,  # MODIFICADO V2: usar train_dataset
-                save_dir=config.output_dir,
-                epoch=epoch,
-                img_height=img_resolution,
-                img_width=img_resolution,
+                model=model, vae=vae, base_scheduler=diff_scheduler,
+                device=device, dataset=test_dataset,
+                save_dir=config.output_dir, epoch=epoch,
+                img_height=img_resolution, img_width=img_resolution,
                 num_steps=config.inference_steps,
                 num_samples=config.inference_samples,
                 dtype=dtype,
