@@ -84,6 +84,8 @@ from diffusers import FlowMatchEulerDiscreteScheduler, QwenImageTransformer2DMod
 from diffusers.models import AutoencoderKLQwenImage
 from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
 from transformers import BitsAndBytesConfig
+import json
+from dataclasses import asdict
 
 from config import TrainingConfig
 from dataset import build_dataloaders
@@ -185,22 +187,33 @@ def build_model(config: TrainingConfig, device: torch.device) -> QwenSingleGPUWr
     return QwenSingleGPUWrapper(transformer)
 
 
-def load_checkpoint(model: QwenSingleGPUWrapper, config: TrainingConfig, device: torch.device):
-    """Carga checkpoint LoRA si existe. Devuelve (start_epoch, best_loss)."""
+def load_checkpoint(model, config, device, optimizer=None, diff_scheduler=None):
     checkpoint_path = os.path.join(config.output_dir, "qwen_lora_best.pt")
     if not os.path.exists(checkpoint_path):
         logger.info("No se encontró checkpoint previo. Iniciando desde cero.")
         return 0, float('inf')
     try:
-        ckpt = torch.load(checkpoint_path, map_location=device, weights_only=True)
+        ckpt = torch.load(checkpoint_path, map_location=device, weights_only=False)
         if isinstance(ckpt, dict) and "lora_state_dict" in ckpt:
             lora_state  = ckpt["lora_state_dict"]
             start_epoch = ckpt.get("epoch", -1) + 1
             best_loss   = ckpt.get("best_loss", float('inf'))
+
+            # Restaurar optimizador
+            if optimizer is not None and "optimizer_state_dict" in ckpt:
+                optimizer.load_state_dict(ckpt["optimizer_state_dict"])
+                logger.info("✓ Estado del optimizador restaurado")
+
+            # Restaurar scheduler si tiene estado
+            if diff_scheduler is not None and "scheduler_state_dict" in ckpt and ckpt["scheduler_state_dict"] is not None:
+                diff_scheduler.load_state_dict(ckpt["scheduler_state_dict"])
+                logger.info("✓ Estado del scheduler restaurado")
+
             logger.info(f"✓ Reanudando desde época {start_epoch} | best_loss={best_loss:.6f}")
         else:
             lora_state, start_epoch, best_loss = ckpt, 0, float('inf')
             logger.warning("Checkpoint en formato antiguo. Reanudando desde época 0.")
+
         missing, unexpected = model.load_state_dict(lora_state, strict=False)
         logger.info(f"{len(lora_state)-len(unexpected)}/{len(lora_state)} pesos LoRA cargados")
         return start_epoch, best_loss
@@ -208,13 +221,27 @@ def load_checkpoint(model: QwenSingleGPUWrapper, config: TrainingConfig, device:
         logger.error(f"Error cargando checkpoint: {e}. Iniciando desde cero.")
         return 0, float('inf')
 
-
-def save_checkpoint(model, config, epoch, best_loss):
+def save_checkpoint(model, config, epoch, best_loss, optimizer, diff_scheduler, extra_name=None):
     local_lora = {k: v.cpu() for k, v in model.state_dict().items() if "lora" in k}
-    save_path  = os.path.join(config.output_dir, "qwen_lora_best.pt")
-    torch.save({"lora_state_dict": local_lora, "epoch": epoch, "best_loss": best_loss}, save_path)
+    ckpt_data  = {
+        "lora_state_dict":      local_lora,
+        "epoch":                epoch,
+        "best_loss":            best_loss,
+        "optimizer_state_dict": optimizer.state_dict(),
+        "scheduler_state_dict": diff_scheduler.state_dict() if hasattr(diff_scheduler, 'state_dict') else None,
+        "learning_rate":        config.lr,
+    }
+
+    save_path = os.path.join(config.output_dir, "qwen_lora_best.pt")
+    torch.save(ckpt_data, save_path)
     logger.info(f"LoRA guardado en: {save_path} (época {epoch}, val_loss={best_loss:.6f})")
 
+    if extra_name:
+        ckpt_dir   = os.path.join(config.output_dir, "checkpoints")
+        os.makedirs(ckpt_dir, exist_ok=True)
+        named_path = os.path.join(ckpt_dir, f"{extra_name}_epoch{epoch:03d}.pt")
+        torch.save(ckpt_data, named_path)
+        logger.info(f"Copia guardada en: {named_path}")
 
 def main():
     config = parse_args()
@@ -234,8 +261,7 @@ def main():
     #modelo
     model = build_model(config, device)
 
-    #Resume checkpoint si existe
-    start_epoch, best_loss = load_checkpoint(model, config, device)
+    
 
     trainable_params = [p for p in model.parameters() if p.requires_grad]
     logger.info(f"{len(trainable_params)} grupos de parámetros entrenables")
@@ -246,6 +272,9 @@ def main():
     diff_scheduler = FlowMatchEulerDiscreteScheduler.from_pretrained(
         config.base_model, subfolder="scheduler"
     )
+
+    #Resume checkpoint si existe
+    start_epoch, best_loss = load_checkpoint(model, config, device, optimizer, diff_scheduler)
 
     # Datasets y dataloaders desde JSON de experimento
     train_dataset, val_dataset, test_dataset, \
@@ -295,8 +324,20 @@ def main():
     with open(csv_file_path, mode=csv_mode, newline="") as f:
         writer = csv.writer(f)
         if csv_mode == "w":
-            writer.writerow(["epoch", "train_loss", "val_loss", "train_pck", "val_pck"])
+            writer.writerow(["epoch", "train_loss", "val_loss", "train_pck", "val_pck",
+                 "train_velocity_loss", "train_heatmap_loss",
+                 "val_velocity_loss", "val_heatmap_loss"])
 
+
+        config_path = os.path.join(config.output_dir, "experiment_config.json")
+        if not os.path.exists(config_path):  # no sobreescribir si se reanuda
+            with open(config_path, "w") as f:
+                json.dump(asdict(config), f, indent=2)
+            logger.info(f"Configuración guardada en {config_path}")
+
+
+    # Nombre del experimento para el checkpoint (sin extensión)
+    exp_name = os.path.splitext(os.path.basename(config.experiment_json))[0]
 
     # -------------------------------------------------------------------------
     # Bucle de entrenamiento
@@ -306,7 +347,8 @@ def main():
         #TRAINING
 
         iterator = tqdm(train_dataloader, desc=f"Epoch {epoch}")
-        avg_loss, avg_pck, steps = 0.0, 0.0, 0
+      
+        avg_loss, avg_pck, avg_velocity_loss, avg_heatmap_loss, steps = 0.0, 0.0, 0.0, 0.0, 0
 
         for step, batch in enumerate(iterator):
             optimizer.zero_grad()
@@ -375,11 +417,14 @@ def main():
 
             avg_loss += loss.item()
             avg_pck  += loss_fn.last_pck
+            avg_velocity_loss += loss_fn.last_velocity_loss
+            avg_heatmap_loss  += loss_fn.last_heatmap_loss
             steps    += 1
+
 
         # Validación
         logger.info("Ejecutando validación...")
-        val_loss, val_pck = validate(
+        val_loss, val_pck, val_vel_loss, val_heat_loss = validate(
             model=model, val_dataloader=val_dataloader,
             loss_fn=loss_fn, diff_scheduler=diff_scheduler,
             device=device, dtype=dtype,
@@ -394,12 +439,17 @@ def main():
         )
 
         with open(csv_file_path, mode="a", newline="") as f:
-            csv.writer(f).writerow([epoch, global_avg_loss, val_loss, global_avg_pck, val_pck])
+            csv.writer(f).writerow([
+            epoch, global_avg_loss, val_loss,
+            global_avg_pck, val_pck,
+            avg_velocity_loss / steps, avg_heatmap_loss / steps,
+            val_vel_loss, val_heat_loss
+        ])
 
         if val_loss < best_loss:
             best_loss = val_loss
             logger.info("🟢 Nueva mejor val_loss. Guardando checkpoint...")
-            save_checkpoint(model, config, epoch, best_loss)
+            save_checkpoint(model, config, epoch, best_loss, optimizer, diff_scheduler, extra_name=exp_name)
         else:
             logger.info("⚪ Val_loss no mejoró.")
 
@@ -414,6 +464,20 @@ def main():
                 num_samples=config.inference_samples,
                 dtype=dtype,
             )
+        # Siempre al final de cada época, copia nombrada en checkpoints/
+        ckpt_dir   = os.path.join(config.output_dir, "checkpoints")
+        os.makedirs(ckpt_dir, exist_ok=True)
+        final_path = os.path.join(ckpt_dir, f"{exp_name}_final_epoch{epoch:03d}.pt")
+        local_lora = {k: v.cpu() for k, v in model.state_dict().items() if "lora" in k}
+        torch.save({
+            "lora_state_dict":      local_lora,
+            "epoch":                epoch,
+            "best_loss":            best_loss,
+            "optimizer_state_dict": optimizer.state_dict(),
+            "scheduler_state_dict": diff_scheduler.state_dict() if hasattr(diff_scheduler, 'state_dict') else None,
+            "learning_rate":        config.lr,
+        }, final_path)
+        logger.info(f"Checkpoint de etapa guardado en: {final_path}")
 
 
 if __name__ == "__main__":

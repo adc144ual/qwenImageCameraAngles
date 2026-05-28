@@ -59,6 +59,9 @@ class CombinedLossFn:
             1.0, 1.0,  # ankles
         ], dtype=torch.float32)
 
+        self.last_velocity_loss = 0.0
+        self.last_heatmap_loss  = 0.0
+
     def set_batch_context(self, target_heatmaps: torch.Tensor, timesteps: torch.Tensor):
         """Actualiza contexto del batch actual."""
         self.current_target_heatmaps = target_heatmaps
@@ -84,6 +87,7 @@ class CombinedLossFn:
             return torch.tensor(0.0, device=device, requires_grad=True)
 
         velocity_loss_val = F.mse_loss(v_pred, v_target, reduction="mean")
+        self.last_velocity_loss = velocity_loss_val.item()
 
         # 2. Heatmap Loss
         heatmap_loss_val = torch.tensor(0.0, device=device)
@@ -140,6 +144,7 @@ class CombinedLossFn:
 
                 # Accuracy: PCK sobre los heatmaps
                 self.last_pck = compute_pck(pred_heatmaps, target_hm)
+                self.last_heatmap_loss  = heatmap_loss_val.item()
 
             except Exception as e:
                 logger.warning(f"[LOSS step {self.step_counter}] Error en heatmap loss: {e}")

@@ -26,6 +26,8 @@ def validate(
     total_loss = 0.0
     total_pck  = 0.0
     num_batches = 0
+    total_vel_loss  = 0.0
+    total_heat_loss = 0.0
 
     # Usar la misma semilla para reproducibilidad en validación
     val_gen = torch.Generator(device=device)
@@ -67,11 +69,15 @@ def validate(
         total_loss += batch_loss.item()
         if isinstance(loss_fn, CombinedLossFn):
             total_pck += loss_fn.last_pck
+            total_vel_loss += loss_fn.last_velocity_loss
+            total_heat_loss += loss_fn.last_heatmap_loss
         num_batches += 1
 
     avg_loss = total_loss / num_batches if num_batches > 0 else 0.0
     avg_pck  = total_pck  / num_batches if num_batches > 0 else 0.0
+    avg_velocity_loss = total_vel_loss / num_batches if num_batches > 0 else 0.0
+    avg_heatmap_loss = total_heat_loss / num_batches if num_batches > 0 else 0.0
 
     model.train()
 
-    return avg_loss, avg_pck
+    return avg_loss, avg_pck, avg_velocity_loss, avg_heatmap_loss
