@@ -50,23 +50,28 @@ class LatentsDatasetFromJSON(Dataset):
         logger.info(f"[{split}] global_max_seq_len = {self.global_max_seq_len}")
 
     def _build_index(self, split: str) -> Dict[int, List[Path]]:
-        """Escanea los directorios correspondientes y construye timestamp → [paths]."""
+        cache_path = self.latents_dir / f"ts_index_cache_{split}.json"
+
+        if cache_path.exists():
+            logger.info(f"[{split}] Cargando índice desde caché: {cache_path}")
+            with open(cache_path) as f:
+                raw = json.load(f)
+            index = {int(k): [self.latents_dir / p for p in v] for k, v in raw.items()}
+            logger.info(f"[{split}] Índice cargado: {len(index)} timestamps únicos")
+            return index
+
+        # Si no hay caché, construir leyendo .pt (lento)
+        logger.warning(f"[{split}] Caché no encontrado en {cache_path}, construyendo índice leyendo .pt...")
         index = {}
-
-        if split == "test":
-            dirs_to_scan = [self.latents_dir / "test"]
-        else:
-            # train y val comparten carpetas
-            dirs_to_scan = [
-                self.latents_dir / "train",
-                self.latents_dir / "val",
-            ]
-
+        dirs_to_scan = [self.latents_dir / "test"] if split == "test" else [
+            self.latents_dir / "train",
+            self.latents_dir / "val",
+        ]
         for scan_dir in dirs_to_scan:
             if not scan_dir.exists():
                 logger.warning(f"Directorio no encontrado: {scan_dir}")
                 continue
-            for pt_path in scan_dir.glob("*.pt"):
+            for pt_path in tqdm(list(scan_dir.glob("*.pt")), desc=f"Indexando {scan_dir.name}"):
                 try:
                     data = torch.load(pt_path, map_location="cpu", weights_only=False)
                     ts = data.get("timestamp")
@@ -78,6 +83,10 @@ class LatentsDatasetFromJSON(Dataset):
                 except Exception as e:
                     logger.warning(f"Error leyendo {pt_path}: {e}")
 
+        # Guardar caché para próximas ejecuciones
+        with open(cache_path, "w") as f:
+            json.dump({k: [str(p) for p in v] for k, v in index.items()}, f)
+        logger.info(f"[{split}] Caché guardado en {cache_path}")
         logger.info(f"[{split}] Índice construido: {len(index)} timestamps únicos")
         return index
 
@@ -99,8 +108,11 @@ def load_experiment_json(experiment_json: str) -> Tuple[List[int], List[int], Li
 
     def extract_timestamps(split_list):
         ts = []
-        for user in split_list:
-            ts.extend(user["timestamps"])
+        for item in split_list:
+            if "timestamps" in item:
+                ts.extend(item["timestamps"])
+            elif "ts" in item:
+                ts.append(item["ts"])
         return ts
 
     train_ts = extract_timestamps(exp.get("train", []))

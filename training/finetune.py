@@ -73,7 +73,7 @@ sys.path.append(parent_dir)
 sys.path.append(current_dir)
 
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-os.environ["HF_HOME"] = "/nas/antoniodetoro/qwen/hf_cache"
+os.environ["HF_HOME"] = "/home/antoniodetoro/nas_dataset/antonio/.qwen/hf_cache"
 os.environ["TMPDIR"] = "/dev/shm"
 os.environ["PYTHONNOUSERSITE"] = "1"
 
@@ -171,6 +171,7 @@ def build_model(config: TrainingConfig, device: torch.device) -> QwenSingleGPUWr
         torch_dtype=torch.bfloat16,
         device_map=str(device),
         attn_implementation="sdpa",
+        local_files_only=True,
     )
     transformer = prepare_model_for_kbit_training(transformer, use_gradient_checkpointing=False)
     lora_config = LoraConfig(
