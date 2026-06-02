@@ -106,13 +106,22 @@ def load_experiment_json(experiment_json: str) -> Tuple[List[int], List[int], Li
     with open(experiment_json) as f:
         exp = json.load(f)
 
+    # def extract_timestamps(split_list):
+    #     ts = []
+    #     for item in split_list:
+    #         if "timestamps" in item:
+    #             ts.extend(item["timestamps"])
+    #         elif "ts" in item:
+    #             ts.append(item["ts"])
+    #     return ts
+
     def extract_timestamps(split_list):
         ts = []
         for item in split_list:
             if "timestamps" in item:
-                ts.extend(item["timestamps"])
+                ts.extend([int(t) for t in item["timestamps"]])
             elif "ts" in item:
-                ts.append(item["ts"])
+                ts.append(int(item["ts"]))  # forzar a int
         return ts
 
     train_ts = extract_timestamps(exp.get("train", []))
@@ -140,7 +149,7 @@ def make_collate_latents(global_max_seq_len: int):
             if "target_heatmaps" in item:
                 target_heatmaps_list.append(item["target_heatmaps"])
             else:
-                logger.warning("target_heatmaps no encontrado en batch item, usando ceros")
+                logger.debug("target_heatmaps no encontrado en batch item, usando ceros")
                 target_heatmaps_list.append(torch.zeros(17, 72, 96, dtype=torch.float32))
 
         target_heatmaps = torch.cat(target_heatmaps_list, dim=0)
