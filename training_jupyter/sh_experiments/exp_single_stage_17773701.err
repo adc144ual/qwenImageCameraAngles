@@ -1,0 +1,703 @@
+
+The following have been reloaded with a version change:
+  1) libiconv/1.16 => libiconv/1.17       3) ncurses/6.3 => ncurses/6.4
+  2) libxml2/2.10.1 => libxml2/2.10.3     4) xz/5.2.7 => xz/5.4.1
+
+Training: 1 GPU (cuda:0)
+Etapas a ejecutar (1):
+  [0] /home/antoniodetoro/nas_dataset/antonio/qwen/experimentos/exp_largo/dataset_splits_uniformes_rareza_ususarios.json
+Cargando modelo desde /home/antoniodetoro/nas_dataset/antonio/qwen/Qwen-Fused-Angles → cuda:0
+Loading checkpoint shards:   0%|          | 0/5 [00:00<?, ?it/s]Loading checkpoint shards:  20%|██        | 1/5 [02:23<09:33, 143.48s/it]Loading checkpoint shards:  40%|████      | 2/5 [04:52<07:19, 146.50s/it]Loading checkpoint shards:  60%|██████    | 3/5 [07:17<04:52, 146.17s/it]Loading checkpoint shards:  80%|████████  | 4/5 [09:40<02:24, 144.70s/it]Loading checkpoint shards: 100%|██████████| 5/5 [09:53<00:00, 97.28s/it] Loading checkpoint shards: 100%|██████████| 5/5 [09:53<00:00, 118.70s/it]
+Creando QwenSingleGPUWrapper...
+QwenSingleGPUWrapper: 60 bloques transformer (sin split).
+/home/antoniodetoro/envs/venv_jupyter/lib/python3.10/site-packages/huggingface_hub/utils/_validators.py:205: UserWarning: The `local_dir_use_symlinks` argument is deprecated and ignored in `hf_hub_download`. Downloading to a local directory does not use symlinks anymore.
+  warnings.warn(
+HTTP Request: HEAD https://huggingface.co/Qwen/Qwen-Image-Edit-2509/resolve/main/scheduler/scheduler_config.json "HTTP/1.1 307 Temporary Redirect"
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/Qwen/Qwen-Image-Edit-2509/d3968ef930e841f4c73640fb8afa3b306a78167e/scheduler%2Fscheduler_config.json "HTTP/1.1 200 OK"
+Cargando VAE en cuda:0...
+HTTP Request: HEAD https://huggingface.co/Qwen/Qwen-Image-Edit-2509/resolve/main/vae/config.json "HTTP/1.1 307 Temporary Redirect"
+HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/Qwen/Qwen-Image-Edit-2509/d3968ef930e841f4c73640fb8afa3b306a78167e/vae%2Fconfig.json "HTTP/1.1 200 OK"
+HTTP Request: HEAD https://huggingface.co/Qwen/Qwen-Image-Edit-2509/resolve/d3968ef930e841f4c73640fb8afa3b306a78167e/vae/diffusion_pytorch_model.safetensors.index.json "HTTP/1.1 404 Not Found"
+HRNet no encontrado, solo velocity loss.
+
+============================================================
+  ETAPA 0  |  dataset_splits_uniformes_rareza_ususarios
+  epoch_offset=0  |  epochs=100
+============================================================
+  output_dir : /home/antoniodetoro/nas_dataset/antonio/qwen/OUTPUTS_EXPERIMENTOS/exp_single_stage/stage_00_dataset_splits_uniformes_rareza_ususarios
+  JSON       : /home/antoniodetoro/nas_dataset/antonio/qwen/experimentos/exp_largo/dataset_splits_uniformes_rareza_ususarios.json
+No se encontró checkpoint previo. Iniciando desde cero.
+⚠️ patience_counter reseteado a 0 por --reset_patience
+Experimento: sin nombre
+Descripción: 
+Timestamps → train: 336 | val: 112 | test: 112
+[train] Cargando índice desde caché: /home/antoniodetoro/nas_dataset/antonio/qwen/datasets/dataset_local_latents_512_idx/ts_index_cache_train.json
+[train] Índice cargado: 15298 timestamps únicos
+[train] 2016 .pt files para 336 timestamps
+[train] Calculando global_max_seq_len...
+[train] global_max_seq_len = 227
+[val] Cargando índice desde caché: /home/antoniodetoro/nas_dataset/antonio/qwen/datasets/dataset_local_latents_512_idx/ts_index_cache_val.json
+[val] Índice cargado: 15298 timestamps únicos
+[val] 672 .pt files para 112 timestamps
+[val] Calculando global_max_seq_len...
+[val] global_max_seq_len = 227
+[test] Cargando índice desde caché: /home/antoniodetoro/nas_dataset/antonio/qwen/datasets/dataset_local_latents_512_idx/ts_index_cache_test.json
+[test] Índice cargado: 3155 timestamps únicos
+[test] 672 .pt files para 112 timestamps
+[test] Calculando global_max_seq_len...
+[test] global_max_seq_len = 227
+global_max_seq_len unificado: 227
+Resolución: 512
+Configuración guardada en /home/antoniodetoro/nas_dataset/antonio/qwen/OUTPUTS_EXPERIMENTOS/exp_single_stage/stage_00_dataset_splits_uniformes_rareza_ususarios/experiment_config.json
+[Etapa 0] Global epoch 0 | Local epoch 0 start
+[Stage 0] GEpoch 0:   0%|          | 0/504 [00:00<?, ?it/s][LOSS step 0] Velocity: 0.575359, Heatmap: 0.000000, PCK: 0.0000, Total: 0.575359 (α=1.00, β=0.00)
+[Stage 0 | GEpoch 0 | Step 0] Grad: 460.472017 | Params grad≠0: 478/960 | VRAM: 11.62/21.88GB | Peak: 21.11GB
+[Stage 0] GEpoch 0:   0%|          | 1/504 [00:52<7:21:59, 52.72s/it][Stage 0 | GEpoch 0 | Step 1] Grad: 399.811424 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:   0%|          | 2/504 [01:44<7:17:34, 52.30s/it][Stage 0 | GEpoch 0 | Step 2] Grad: 331.718696 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:   1%|          | 3/504 [02:37<7:16:46, 52.31s/it][Stage 0 | GEpoch 0 | Step 3] Grad: 650.972783 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:   1%|          | 4/504 [03:29<7:14:53, 52.19s/it][Stage 0 | GEpoch 0 | Step 4] Grad: 911.862478 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:   1%|          | 5/504 [04:21<7:13:32, 52.13s/it][Stage 0 | GEpoch 0 | Step 5] Grad: 379.574153 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:   1%|          | 6/504 [05:13<7:12:20, 52.09s/it][Stage 0 | GEpoch 0 | Step 6] Grad: 389.090645 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:   1%|▏         | 7/504 [06:05<7:11:14, 52.06s/it][Stage 0 | GEpoch 0 | Step 7] Grad: 544.398735 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:   2%|▏         | 8/504 [06:57<7:10:14, 52.04s/it][Stage 0 | GEpoch 0 | Step 8] Grad: 519.804904 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:   2%|▏         | 9/504 [07:49<7:09:18, 52.04s/it][Stage 0 | GEpoch 0 | Step 9] Grad: 457.601480 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:   2%|▏         | 10/504 [08:41<7:08:23, 52.03s/it][Stage 0 | GEpoch 0 | Step 10] Grad: 954.838698 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:   2%|▏         | 11/504 [09:33<7:07:31, 52.03s/it][Stage 0 | GEpoch 0 | Step 11] Grad: 1032.917357 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:   2%|▏         | 12/504 [10:25<7:06:37, 52.03s/it][Stage 0 | GEpoch 0 | Step 12] Grad: 608.697959 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:   3%|▎         | 13/504 [11:17<7:05:46, 52.03s/it][Stage 0 | GEpoch 0 | Step 13] Grad: 764.579718 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:   3%|▎         | 14/504 [12:09<7:04:55, 52.03s/it][Stage 0 | GEpoch 0 | Step 14] Grad: 933.021865 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:   3%|▎         | 15/504 [13:01<7:03:58, 52.02s/it][Stage 0 | GEpoch 0 | Step 15] Grad: 970.306170 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:   3%|▎         | 16/504 [13:53<7:03:04, 52.02s/it][Stage 0 | GEpoch 0 | Step 16] Grad: 659.730469 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:   3%|▎         | 17/504 [14:45<7:02:12, 52.02s/it][Stage 0 | GEpoch 0 | Step 17] Grad: 639.204847 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:   4%|▎         | 18/504 [15:37<7:01:20, 52.02s/it][Stage 0 | GEpoch 0 | Step 18] Grad: 619.976131 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:   4%|▍         | 19/504 [16:29<7:00:28, 52.02s/it][Stage 0 | GEpoch 0 | Step 19] Grad: 552.473426 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:   4%|▍         | 20/504 [17:21<6:59:35, 52.02s/it][Stage 0 | GEpoch 0 | Step 20] Grad: 534.495536 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:   4%|▍         | 21/504 [18:13<6:58:39, 52.01s/it][Stage 0 | GEpoch 0 | Step 21] Grad: 727.885443 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:   4%|▍         | 22/504 [19:05<6:57:52, 52.02s/it][Stage 0 | GEpoch 0 | Step 22] Grad: 694.242785 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:   5%|▍         | 23/504 [19:57<6:57:00, 52.02s/it][Stage 0 | GEpoch 0 | Step 23] Grad: 799.355551 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:   5%|▍         | 24/504 [20:49<6:56:08, 52.02s/it][Stage 0 | GEpoch 0 | Step 24] Grad: 1127.930386 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:   5%|▍         | 25/504 [21:41<6:55:16, 52.02s/it][Stage 0 | GEpoch 0 | Step 25] Grad: 841.037612 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:   5%|▌         | 26/504 [22:33<6:54:27, 52.02s/it][Stage 0 | GEpoch 0 | Step 26] Grad: 750.093990 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:   5%|▌         | 27/504 [23:25<6:53:33, 52.02s/it][Stage 0 | GEpoch 0 | Step 27] Grad: 763.555926 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:   6%|▌         | 28/504 [24:17<6:52:39, 52.01s/it][Stage 0 | GEpoch 0 | Step 28] Grad: 773.494202 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:   6%|▌         | 29/504 [25:09<6:51:48, 52.02s/it][Stage 0 | GEpoch 0 | Step 29] Grad: 772.724203 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:   6%|▌         | 30/504 [26:01<6:50:57, 52.02s/it][Stage 0 | GEpoch 0 | Step 30] Grad: 772.085222 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:   6%|▌         | 31/504 [26:53<6:50:08, 52.03s/it][Stage 0 | GEpoch 0 | Step 31] Grad: 669.262387 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:   6%|▋         | 32/504 [27:45<6:49:15, 52.02s/it][Stage 0 | GEpoch 0 | Step 32] Grad: 609.631705 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:   7%|▋         | 33/504 [28:37<6:48:25, 52.03s/it][Stage 0 | GEpoch 0 | Step 33] Grad: 716.044503 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:   7%|▋         | 34/504 [29:29<6:47:33, 52.03s/it][Stage 0 | GEpoch 0 | Step 34] Grad: 972.476072 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:   7%|▋         | 35/504 [30:21<6:46:39, 52.02s/it][Stage 0 | GEpoch 0 | Step 35] Grad: 599.216923 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:   7%|▋         | 36/504 [31:13<6:45:45, 52.02s/it][Stage 0 | GEpoch 0 | Step 36] Grad: 515.776023 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:   7%|▋         | 37/504 [32:05<6:44:57, 52.03s/it][Stage 0 | GEpoch 0 | Step 37] Grad: 1589.044044 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:   8%|▊         | 38/504 [32:57<6:44:02, 52.02s/it][Stage 0 | GEpoch 0 | Step 38] Grad: 948.913435 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:   8%|▊         | 39/504 [33:49<6:43:11, 52.03s/it][Stage 0 | GEpoch 0 | Step 39] Grad: 727.224951 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:   8%|▊         | 40/504 [34:41<6:42:22, 52.03s/it][Stage 0 | GEpoch 0 | Step 40] Grad: 879.831888 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:   8%|▊         | 41/504 [35:33<6:41:30, 52.03s/it][Stage 0 | GEpoch 0 | Step 41] Grad: 644.123202 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:   8%|▊         | 42/504 [36:25<6:40:37, 52.03s/it][Stage 0 | GEpoch 0 | Step 42] Grad: 392.760908 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:   9%|▊         | 43/504 [37:17<6:39:43, 52.02s/it][Stage 0 | GEpoch 0 | Step 43] Grad: 743.393291 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:   9%|▊         | 44/504 [38:09<6:38:48, 52.02s/it][Stage 0 | GEpoch 0 | Step 44] Grad: 387.953560 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:   9%|▉         | 45/504 [39:01<6:37:56, 52.02s/it][Stage 0 | GEpoch 0 | Step 45] Grad: 567.722556 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:   9%|▉         | 46/504 [39:53<6:37:04, 52.02s/it][Stage 0 | GEpoch 0 | Step 46] Grad: 519.377919 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:   9%|▉         | 47/504 [40:45<6:36:10, 52.02s/it][Stage 0 | GEpoch 0 | Step 47] Grad: 628.753068 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  10%|▉         | 48/504 [41:37<6:35:17, 52.01s/it][Stage 0 | GEpoch 0 | Step 48] Grad: 500.032100 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  10%|▉         | 49/504 [42:29<6:34:27, 52.02s/it][Stage 0 | GEpoch 0 | Step 49] Grad: 461.306109 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  10%|▉         | 50/504 [43:21<6:33:36, 52.02s/it][LOSS step 50] Velocity: 0.142246, Heatmap: 0.000000, PCK: 0.0000, Total: 0.142246 (α=1.00, β=0.00)
+[Stage 0 | GEpoch 0 | Step 50] Grad: 347.148154 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  10%|█         | 51/504 [44:14<6:32:45, 52.02s/it][Stage 0 | GEpoch 0 | Step 51] Grad: 422.518362 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  10%|█         | 52/504 [45:06<6:31:52, 52.02s/it][Stage 0 | GEpoch 0 | Step 52] Grad: 334.974097 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  11%|█         | 53/504 [45:58<6:31:02, 52.02s/it][Stage 0 | GEpoch 0 | Step 53] Grad: 564.120145 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  11%|█         | 54/504 [46:50<6:30:11, 52.03s/it][Stage 0 | GEpoch 0 | Step 54] Grad: 480.810243 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  11%|█         | 55/504 [47:42<6:29:18, 52.02s/it][Stage 0 | GEpoch 0 | Step 55] Grad: 1912.965397 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  11%|█         | 56/504 [48:34<6:28:24, 52.02s/it][Stage 0 | GEpoch 0 | Step 56] Grad: 508.097228 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  11%|█▏        | 57/504 [49:26<6:27:31, 52.02s/it][Stage 0 | GEpoch 0 | Step 57] Grad: 331.643041 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  12%|█▏        | 58/504 [50:18<6:26:38, 52.02s/it][Stage 0 | GEpoch 0 | Step 58] Grad: 277.601243 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  12%|█▏        | 59/504 [51:10<6:25:50, 52.02s/it][Stage 0 | GEpoch 0 | Step 59] Grad: 396.741331 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  12%|█▏        | 60/504 [52:02<6:24:57, 52.02s/it][Stage 0 | GEpoch 0 | Step 60] Grad: 370.765706 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  12%|█▏        | 61/504 [52:54<6:24:07, 52.03s/it][Stage 0 | GEpoch 0 | Step 61] Grad: 474.539555 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  12%|█▏        | 62/504 [53:46<6:23:11, 52.02s/it][Stage 0 | GEpoch 0 | Step 62] Grad: 622.960213 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  12%|█▎        | 63/504 [54:38<6:22:19, 52.02s/it][Stage 0 | GEpoch 0 | Step 63] Grad: 325.086994 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  13%|█▎        | 64/504 [55:30<6:21:26, 52.02s/it][Stage 0 | GEpoch 0 | Step 64] Grad: 489.076465 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  13%|█▎        | 65/504 [56:22<6:20:34, 52.01s/it][Stage 0 | GEpoch 0 | Step 65] Grad: 380.695516 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  13%|█▎        | 66/504 [57:14<6:19:38, 52.00s/it][Stage 0 | GEpoch 0 | Step 66] Grad: 292.591521 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  13%|█▎        | 67/504 [58:06<6:18:45, 52.00s/it][Stage 0 | GEpoch 0 | Step 67] Grad: 326.385397 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  13%|█▎        | 68/504 [58:58<6:17:54, 52.00s/it][Stage 0 | GEpoch 0 | Step 68] Grad: 307.629420 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  14%|█▎        | 69/504 [59:50<6:17:04, 52.01s/it][Stage 0 | GEpoch 0 | Step 69] Grad: 383.918827 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  14%|█▍        | 70/504 [1:00:42<6:16:12, 52.01s/it][Stage 0 | GEpoch 0 | Step 70] Grad: 411.024490 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  14%|█▍        | 71/504 [1:01:34<6:15:20, 52.01s/it][Stage 0 | GEpoch 0 | Step 71] Grad: 459.522473 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  14%|█▍        | 72/504 [1:02:26<6:14:30, 52.01s/it][Stage 0 | GEpoch 0 | Step 72] Grad: 304.208339 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  14%|█▍        | 73/504 [1:03:18<6:13:37, 52.01s/it][Stage 0 | GEpoch 0 | Step 73] Grad: 238.946426 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  15%|█▍        | 74/504 [1:04:10<6:12:44, 52.01s/it][Stage 0 | GEpoch 0 | Step 74] Grad: 517.463964 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  15%|█▍        | 75/504 [1:05:02<6:11:49, 52.00s/it][Stage 0 | GEpoch 0 | Step 75] Grad: 323.463560 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  15%|█▌        | 76/504 [1:05:54<6:11:01, 52.01s/it][Stage 0 | GEpoch 0 | Step 76] Grad: 224.226271 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  15%|█▌        | 77/504 [1:06:46<6:10:12, 52.02s/it][Stage 0 | GEpoch 0 | Step 77] Grad: 681.414237 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  15%|█▌        | 78/504 [1:07:38<6:09:21, 52.02s/it][Stage 0 | GEpoch 0 | Step 78] Grad: 154.220756 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  16%|█▌        | 79/504 [1:08:30<6:08:34, 52.03s/it][Stage 0 | GEpoch 0 | Step 79] Grad: 990.601228 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  16%|█▌        | 80/504 [1:09:22<6:07:40, 52.03s/it][Stage 0 | GEpoch 0 | Step 80] Grad: 522.117354 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  16%|█▌        | 81/504 [1:10:14<6:06:47, 52.03s/it][Stage 0 | GEpoch 0 | Step 81] Grad: 429.911049 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  16%|█▋        | 82/504 [1:11:06<6:05:51, 52.02s/it][Stage 0 | GEpoch 0 | Step 82] Grad: 528.083790 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  16%|█▋        | 83/504 [1:11:58<6:05:01, 52.02s/it][Stage 0 | GEpoch 0 | Step 83] Grad: 689.191078 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  17%|█▋        | 84/504 [1:12:50<6:04:05, 52.01s/it][Stage 0 | GEpoch 0 | Step 84] Grad: 262.730134 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  17%|█▋        | 85/504 [1:13:42<6:03:14, 52.01s/it][Stage 0 | GEpoch 0 | Step 85] Grad: 457.997182 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  17%|█▋        | 86/504 [1:14:34<6:02:22, 52.01s/it][Stage 0 | GEpoch 0 | Step 86] Grad: 323.434869 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  17%|█▋        | 87/504 [1:15:26<6:01:30, 52.01s/it][Stage 0 | GEpoch 0 | Step 87] Grad: 367.173977 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  17%|█▋        | 88/504 [1:16:18<6:00:36, 52.01s/it][Stage 0 | GEpoch 0 | Step 88] Grad: 366.084200 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  18%|█▊        | 89/504 [1:17:10<5:59:44, 52.01s/it][Stage 0 | GEpoch 0 | Step 89] Grad: 408.974019 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  18%|█▊        | 90/504 [1:18:02<5:58:53, 52.01s/it][Stage 0 | GEpoch 0 | Step 90] Grad: 406.307190 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  18%|█▊        | 91/504 [1:18:54<5:58:02, 52.01s/it][Stage 0 | GEpoch 0 | Step 91] Grad: 653.437866 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  18%|█▊        | 92/504 [1:19:46<5:57:10, 52.01s/it][Stage 0 | GEpoch 0 | Step 92] Grad: 379.691375 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  18%|█▊        | 93/504 [1:20:38<5:56:20, 52.02s/it][Stage 0 | GEpoch 0 | Step 93] Grad: 282.664178 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  19%|█▊        | 94/504 [1:21:30<5:55:28, 52.02s/it][Stage 0 | GEpoch 0 | Step 94] Grad: 1570.408396 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  19%|█▉        | 95/504 [1:22:22<5:54:36, 52.02s/it][Stage 0 | GEpoch 0 | Step 95] Grad: 409.806077 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  19%|█▉        | 96/504 [1:23:14<5:53:45, 52.02s/it][Stage 0 | GEpoch 0 | Step 96] Grad: 393.975671 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  19%|█▉        | 97/504 [1:24:06<5:52:49, 52.01s/it][Stage 0 | GEpoch 0 | Step 97] Grad: 633.627537 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  19%|█▉        | 98/504 [1:24:58<5:51:54, 52.01s/it][Stage 0 | GEpoch 0 | Step 98] Grad: 302.540048 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  20%|█▉        | 99/504 [1:25:50<5:51:06, 52.02s/it][Stage 0 | GEpoch 0 | Step 99] Grad: 361.543815 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  20%|█▉        | 100/504 [1:26:42<5:50:32, 52.06s/it][LOSS step 100] Velocity: 0.120865, Heatmap: 0.000000, PCK: 0.0000, Total: 0.120865 (α=1.00, β=0.00)
+[Stage 0 | GEpoch 0 | Step 100] Grad: 310.916508 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  20%|██        | 101/504 [1:27:34<5:49:36, 52.05s/it][Stage 0 | GEpoch 0 | Step 101] Grad: 587.075908 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  20%|██        | 102/504 [1:28:26<5:48:38, 52.04s/it][Stage 0 | GEpoch 0 | Step 102] Grad: 501.432345 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  20%|██        | 103/504 [1:29:18<5:47:41, 52.02s/it][Stage 0 | GEpoch 0 | Step 103] Grad: 463.290408 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  21%|██        | 104/504 [1:30:10<5:46:46, 52.02s/it][Stage 0 | GEpoch 0 | Step 104] Grad: 360.149516 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  21%|██        | 105/504 [1:31:02<5:45:53, 52.01s/it][Stage 0 | GEpoch 0 | Step 105] Grad: 509.098750 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  21%|██        | 106/504 [1:31:54<5:44:58, 52.01s/it][Stage 0 | GEpoch 0 | Step 106] Grad: 367.966135 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  21%|██        | 107/504 [1:32:47<5:44:09, 52.01s/it][Stage 0 | GEpoch 0 | Step 107] Grad: 418.530377 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  21%|██▏       | 108/504 [1:33:39<5:43:15, 52.01s/it][Stage 0 | GEpoch 0 | Step 108] Grad: 420.687491 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  22%|██▏       | 109/504 [1:34:30<5:42:20, 52.00s/it][Stage 0 | GEpoch 0 | Step 109] Grad: 323.319196 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  22%|██▏       | 110/504 [1:35:22<5:41:29, 52.00s/it][Stage 0 | GEpoch 0 | Step 110] Grad: 288.587296 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  22%|██▏       | 111/504 [1:36:15<5:40:38, 52.01s/it][Stage 0 | GEpoch 0 | Step 111] Grad: 252.917483 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  22%|██▏       | 112/504 [1:37:07<5:39:48, 52.01s/it][Stage 0 | GEpoch 0 | Step 112] Grad: 419.325930 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  22%|██▏       | 113/504 [1:37:59<5:38:59, 52.02s/it][Stage 0 | GEpoch 0 | Step 113] Grad: 126.116133 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  23%|██▎       | 114/504 [1:38:51<5:38:08, 52.02s/it][Stage 0 | GEpoch 0 | Step 114] Grad: 343.222305 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  23%|██▎       | 115/504 [1:39:43<5:37:13, 52.02s/it][Stage 0 | GEpoch 0 | Step 115] Grad: 237.979917 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  23%|██▎       | 116/504 [1:40:35<5:36:21, 52.02s/it][Stage 0 | GEpoch 0 | Step 116] Grad: 217.716154 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  23%|██▎       | 117/504 [1:41:27<5:35:31, 52.02s/it][Stage 0 | GEpoch 0 | Step 117] Grad: 210.143571 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  23%|██▎       | 118/504 [1:42:19<5:34:38, 52.02s/it][Stage 0 | GEpoch 0 | Step 118] Grad: 536.137210 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  24%|██▎       | 119/504 [1:43:11<5:33:45, 52.01s/it][Stage 0 | GEpoch 0 | Step 119] Grad: 229.854736 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  24%|██▍       | 120/504 [1:44:03<5:32:51, 52.01s/it][Stage 0 | GEpoch 0 | Step 120] Grad: 406.265863 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  24%|██▍       | 121/504 [1:44:55<5:31:58, 52.01s/it][Stage 0 | GEpoch 0 | Step 121] Grad: 259.888794 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  24%|██▍       | 122/504 [1:45:47<5:31:06, 52.01s/it][Stage 0 | GEpoch 0 | Step 122] Grad: 306.236955 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  24%|██▍       | 123/504 [1:46:39<5:30:13, 52.00s/it][Stage 0 | GEpoch 0 | Step 123] Grad: 257.519910 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  25%|██▍       | 124/504 [1:47:31<5:29:24, 52.01s/it][Stage 0 | GEpoch 0 | Step 124] Grad: 425.899912 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  25%|██▍       | 125/504 [1:48:23<5:28:33, 52.01s/it][Stage 0 | GEpoch 0 | Step 125] Grad: 179.900397 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  25%|██▌       | 126/504 [1:49:15<5:27:41, 52.01s/it][Stage 0 | GEpoch 0 | Step 126] Grad: 720.183337 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  25%|██▌       | 127/504 [1:50:07<5:26:46, 52.01s/it][Stage 0 | GEpoch 0 | Step 127] Grad: 290.828798 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  25%|██▌       | 128/504 [1:50:59<5:25:52, 52.00s/it][Stage 0 | GEpoch 0 | Step 128] Grad: 465.992757 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  26%|██▌       | 129/504 [1:51:51<5:25:02, 52.01s/it][Stage 0 | GEpoch 0 | Step 129] Grad: 316.578750 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  26%|██▌       | 130/504 [1:52:43<5:24:10, 52.01s/it][Stage 0 | GEpoch 0 | Step 130] Grad: 609.692067 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  26%|██▌       | 131/504 [1:53:35<5:23:16, 52.00s/it][Stage 0 | GEpoch 0 | Step 131] Grad: 188.471162 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  26%|██▌       | 132/504 [1:54:27<5:22:21, 51.99s/it][Stage 0 | GEpoch 0 | Step 132] Grad: 332.193992 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  26%|██▋       | 133/504 [1:55:19<5:21:32, 52.00s/it][Stage 0 | GEpoch 0 | Step 133] Grad: 244.383561 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  27%|██▋       | 134/504 [1:56:11<5:20:41, 52.01s/it][Stage 0 | GEpoch 0 | Step 134] Grad: 184.067701 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  27%|██▋       | 135/504 [1:57:03<5:19:54, 52.02s/it][Stage 0 | GEpoch 0 | Step 135] Grad: 258.743249 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  27%|██▋       | 136/504 [1:57:55<5:19:03, 52.02s/it][Stage 0 | GEpoch 0 | Step 136] Grad: 169.150533 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  27%|██▋       | 137/504 [1:58:47<5:18:11, 52.02s/it][Stage 0 | GEpoch 0 | Step 137] Grad: 188.115637 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  27%|██▋       | 138/504 [1:59:39<5:17:18, 52.02s/it][Stage 0 | GEpoch 0 | Step 138] Grad: 123.836015 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  28%|██▊       | 139/504 [2:00:31<5:16:28, 52.02s/it][Stage 0 | GEpoch 0 | Step 139] Grad: 317.713063 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  28%|██▊       | 140/504 [2:01:23<5:15:36, 52.02s/it][Stage 0 | GEpoch 0 | Step 140] Grad: 186.079748 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  28%|██▊       | 141/504 [2:02:15<5:14:46, 52.03s/it][Stage 0 | GEpoch 0 | Step 141] Grad: 279.635480 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  28%|██▊       | 142/504 [2:03:07<5:14:10, 52.07s/it][Stage 0 | GEpoch 0 | Step 142] Grad: 200.207506 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  28%|██▊       | 143/504 [2:03:59<5:13:11, 52.05s/it][Stage 0 | GEpoch 0 | Step 143] Grad: 356.718701 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  29%|██▊       | 144/504 [2:04:51<5:12:15, 52.04s/it][Stage 0 | GEpoch 0 | Step 144] Grad: 268.681017 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  29%|██▉       | 145/504 [2:05:43<5:11:18, 52.03s/it][Stage 0 | GEpoch 0 | Step 145] Grad: 216.063312 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  29%|██▉       | 146/504 [2:06:35<5:10:21, 52.01s/it][Stage 0 | GEpoch 0 | Step 146] Grad: 210.873860 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  29%|██▉       | 147/504 [2:07:27<5:09:30, 52.02s/it][Stage 0 | GEpoch 0 | Step 147] Grad: 222.581851 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  29%|██▉       | 148/504 [2:08:19<5:08:36, 52.01s/it][Stage 0 | GEpoch 0 | Step 148] Grad: 158.854723 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  30%|██▉       | 149/504 [2:09:11<5:07:44, 52.01s/it][Stage 0 | GEpoch 0 | Step 149] Grad: 276.962052 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  30%|██▉       | 150/504 [2:10:03<5:06:49, 52.01s/it][LOSS step 150] Velocity: 0.254558, Heatmap: 0.000000, PCK: 0.0000, Total: 0.254558 (α=1.00, β=0.00)
+[Stage 0 | GEpoch 0 | Step 150] Grad: 311.811305 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  30%|██▉       | 151/504 [2:10:55<5:05:57, 52.00s/it][Stage 0 | GEpoch 0 | Step 151] Grad: 248.700252 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  30%|███       | 152/504 [2:11:47<5:05:03, 52.00s/it][Stage 0 | GEpoch 0 | Step 152] Grad: 141.583752 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  30%|███       | 153/504 [2:12:39<5:04:13, 52.00s/it][Stage 0 | GEpoch 0 | Step 153] Grad: 387.831967 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  31%|███       | 154/504 [2:13:31<5:03:22, 52.01s/it][Stage 0 | GEpoch 0 | Step 154] Grad: 207.748191 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  31%|███       | 155/504 [2:14:23<5:02:34, 52.02s/it][Stage 0 | GEpoch 0 | Step 155] Grad: 450.097366 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  31%|███       | 156/504 [2:15:15<5:01:39, 52.01s/it][Stage 0 | GEpoch 0 | Step 156] Grad: 224.676026 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  31%|███       | 157/504 [2:16:07<5:00:49, 52.02s/it][Stage 0 | GEpoch 0 | Step 157] Grad: 182.766253 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  31%|███▏      | 158/504 [2:16:59<4:59:58, 52.02s/it][Stage 0 | GEpoch 0 | Step 158] Grad: 161.152537 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  32%|███▏      | 159/504 [2:17:51<4:59:09, 52.03s/it][Stage 0 | GEpoch 0 | Step 159] Grad: 2269.349311 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  32%|███▏      | 160/504 [2:18:43<4:58:15, 52.02s/it][Stage 0 | GEpoch 0 | Step 160] Grad: 262.350027 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  32%|███▏      | 161/504 [2:19:35<4:57:21, 52.02s/it][Stage 0 | GEpoch 0 | Step 161] Grad: 132.448259 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  32%|███▏      | 162/504 [2:20:27<4:56:27, 52.01s/it][Stage 0 | GEpoch 0 | Step 162] Grad: 225.771489 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  32%|███▏      | 163/504 [2:21:19<4:55:34, 52.01s/it][Stage 0 | GEpoch 0 | Step 163] Grad: 240.553262 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  33%|███▎      | 164/504 [2:22:11<4:54:42, 52.01s/it][Stage 0 | GEpoch 0 | Step 164] Grad: 126.497177 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  33%|███▎      | 165/504 [2:23:03<4:53:53, 52.02s/it][Stage 0 | GEpoch 0 | Step 165] Grad: 346.925391 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  33%|███▎      | 166/504 [2:23:55<4:53:02, 52.02s/it][Stage 0 | GEpoch 0 | Step 166] Grad: 156.534877 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  33%|███▎      | 167/504 [2:24:47<4:52:10, 52.02s/it][Stage 0 | GEpoch 0 | Step 167] Grad: 194.516281 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  33%|███▎      | 168/504 [2:25:39<4:51:19, 52.02s/it][Stage 0 | GEpoch 0 | Step 168] Grad: 302.245122 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  34%|███▎      | 169/504 [2:26:31<4:50:26, 52.02s/it][Stage 0 | GEpoch 0 | Step 169] Grad: 134.254613 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  34%|███▎      | 170/504 [2:27:23<4:49:33, 52.02s/it][Stage 0 | GEpoch 0 | Step 170] Grad: 183.234969 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  34%|███▍      | 171/504 [2:28:15<4:48:38, 52.01s/it][Stage 0 | GEpoch 0 | Step 171] Grad: 1269.096706 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  34%|███▍      | 172/504 [2:29:07<4:47:47, 52.01s/it][Stage 0 | GEpoch 0 | Step 172] Grad: 116.560666 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  34%|███▍      | 173/504 [2:29:59<4:46:54, 52.01s/it][Stage 0 | GEpoch 0 | Step 173] Grad: 236.144982 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  35%|███▍      | 174/504 [2:30:51<4:46:03, 52.01s/it][Stage 0 | GEpoch 0 | Step 174] Grad: 153.202210 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  35%|███▍      | 175/504 [2:31:43<4:45:11, 52.01s/it][Stage 0 | GEpoch 0 | Step 175] Grad: 102.595168 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  35%|███▍      | 176/504 [2:32:36<4:44:20, 52.01s/it][Stage 0 | GEpoch 0 | Step 176] Grad: 171.940037 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  35%|███▌      | 177/504 [2:33:28<4:43:26, 52.01s/it][Stage 0 | GEpoch 0 | Step 177] Grad: 208.478069 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  35%|███▌      | 178/504 [2:34:20<4:42:36, 52.01s/it][Stage 0 | GEpoch 0 | Step 178] Grad: 220.266600 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  36%|███▌      | 179/504 [2:35:12<4:41:45, 52.02s/it][Stage 0 | GEpoch 0 | Step 179] Grad: 145.892359 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  36%|███▌      | 180/504 [2:36:04<4:40:52, 52.02s/it][Stage 0 | GEpoch 0 | Step 180] Grad: 131.519780 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  36%|███▌      | 181/504 [2:36:56<4:40:03, 52.02s/it][Stage 0 | GEpoch 0 | Step 181] Grad: 174.816895 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  36%|███▌      | 182/504 [2:37:48<4:39:09, 52.02s/it][Stage 0 | GEpoch 0 | Step 182] Grad: 233.760312 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  36%|███▋      | 183/504 [2:38:40<4:38:16, 52.01s/it][Stage 0 | GEpoch 0 | Step 183] Grad: 192.165780 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  37%|███▋      | 184/504 [2:39:32<4:37:26, 52.02s/it][Stage 0 | GEpoch 0 | Step 184] Grad: 219.861665 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  37%|███▋      | 185/504 [2:40:24<4:36:35, 52.02s/it][Stage 0 | GEpoch 0 | Step 185] Grad: 397.467947 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  37%|███▋      | 186/504 [2:41:16<4:35:44, 52.03s/it][Stage 0 | GEpoch 0 | Step 186] Grad: 162.000875 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  37%|███▋      | 187/504 [2:42:08<4:34:50, 52.02s/it][Stage 0 | GEpoch 0 | Step 187] Grad: 254.269655 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  37%|███▋      | 188/504 [2:43:00<4:33:58, 52.02s/it][Stage 0 | GEpoch 0 | Step 188] Grad: 241.233238 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  38%|███▊      | 189/504 [2:43:52<4:33:04, 52.01s/it][Stage 0 | GEpoch 0 | Step 189] Grad: 176.401078 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  38%|███▊      | 190/504 [2:44:44<4:32:12, 52.01s/it][Stage 0 | GEpoch 0 | Step 190] Grad: 250.988526 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  38%|███▊      | 191/504 [2:45:36<4:31:20, 52.01s/it][Stage 0 | GEpoch 0 | Step 191] Grad: 182.191677 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  38%|███▊      | 192/504 [2:46:28<4:30:27, 52.01s/it][Stage 0 | GEpoch 0 | Step 192] Grad: 203.438892 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  38%|███▊      | 193/504 [2:47:20<4:29:35, 52.01s/it][Stage 0 | GEpoch 0 | Step 193] Grad: 221.722625 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  38%|███▊      | 194/504 [2:48:12<4:28:42, 52.01s/it][Stage 0 | GEpoch 0 | Step 194] Grad: 215.346099 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  39%|███▊      | 195/504 [2:49:04<4:27:54, 52.02s/it][Stage 0 | GEpoch 0 | Step 195] Grad: 134.523565 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  39%|███▉      | 196/504 [2:49:56<4:27:01, 52.02s/it][Stage 0 | GEpoch 0 | Step 196] Grad: 175.337188 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  39%|███▉      | 197/504 [2:50:48<4:26:06, 52.01s/it][Stage 0 | GEpoch 0 | Step 197] Grad: 134.392512 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  39%|███▉      | 198/504 [2:51:40<4:25:15, 52.01s/it][Stage 0 | GEpoch 0 | Step 198] Grad: 170.220132 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  39%|███▉      | 199/504 [2:52:32<4:24:25, 52.02s/it][Stage 0 | GEpoch 0 | Step 199] Grad: 243.299097 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  40%|███▉      | 200/504 [2:53:24<4:23:33, 52.02s/it][LOSS step 200] Velocity: 0.447700, Heatmap: 0.000000, PCK: 0.0000, Total: 0.447700 (α=1.00, β=0.00)
+[Stage 0 | GEpoch 0 | Step 200] Grad: 254.116895 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  40%|███▉      | 201/504 [2:54:16<4:22:42, 52.02s/it][Stage 0 | GEpoch 0 | Step 201] Grad: 195.153851 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  40%|████      | 202/504 [2:55:08<4:21:50, 52.02s/it][Stage 0 | GEpoch 0 | Step 202] Grad: 215.819890 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  40%|████      | 203/504 [2:56:00<4:20:58, 52.02s/it][Stage 0 | GEpoch 0 | Step 203] Grad: 185.481792 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  40%|████      | 204/504 [2:56:52<4:20:06, 52.02s/it][Stage 0 | GEpoch 0 | Step 204] Grad: 260.022624 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  41%|████      | 205/504 [2:57:44<4:19:11, 52.01s/it][Stage 0 | GEpoch 0 | Step 205] Grad: 167.346346 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  41%|████      | 206/504 [2:58:36<4:18:18, 52.01s/it][Stage 0 | GEpoch 0 | Step 206] Grad: 127.038208 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  41%|████      | 207/504 [2:59:28<4:17:24, 52.00s/it][Stage 0 | GEpoch 0 | Step 207] Grad: 161.284994 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  41%|████▏     | 208/504 [3:00:20<4:16:35, 52.01s/it][Stage 0 | GEpoch 0 | Step 208] Grad: 166.611599 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  41%|████▏     | 209/504 [3:01:12<4:15:43, 52.01s/it][Stage 0 | GEpoch 0 | Step 209] Grad: 244.711889 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  42%|████▏     | 210/504 [3:02:04<4:14:50, 52.01s/it][Stage 0 | GEpoch 0 | Step 210] Grad: 246.014247 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  42%|████▏     | 211/504 [3:02:56<4:13:58, 52.01s/it][Stage 0 | GEpoch 0 | Step 211] Grad: 136.729045 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  42%|████▏     | 212/504 [3:03:48<4:13:06, 52.01s/it][Stage 0 | GEpoch 0 | Step 212] Grad: 158.104268 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  42%|████▏     | 213/504 [3:04:40<4:12:17, 52.02s/it][Stage 0 | GEpoch 0 | Step 213] Grad: 277.638060 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  42%|████▏     | 214/504 [3:05:32<4:11:24, 52.02s/it][Stage 0 | GEpoch 0 | Step 214] Grad: 151.000261 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  43%|████▎     | 215/504 [3:06:24<4:10:31, 52.01s/it][Stage 0 | GEpoch 0 | Step 215] Grad: 235.974021 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  43%|████▎     | 216/504 [3:07:16<4:09:40, 52.02s/it][Stage 0 | GEpoch 0 | Step 216] Grad: 189.139085 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  43%|████▎     | 217/504 [3:08:08<4:08:49, 52.02s/it][Stage 0 | GEpoch 0 | Step 217] Grad: 191.842490 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  43%|████▎     | 218/504 [3:09:00<4:07:55, 52.01s/it][Stage 0 | GEpoch 0 | Step 218] Grad: 299.798491 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  43%|████▎     | 219/504 [3:09:52<4:07:05, 52.02s/it][Stage 0 | GEpoch 0 | Step 219] Grad: 210.731034 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  44%|████▎     | 220/504 [3:10:44<4:06:12, 52.02s/it][Stage 0 | GEpoch 0 | Step 220] Grad: 141.815394 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  44%|████▍     | 221/504 [3:11:36<4:05:21, 52.02s/it][Stage 0 | GEpoch 0 | Step 221] Grad: 329.843861 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  44%|████▍     | 222/504 [3:12:28<4:04:29, 52.02s/it][Stage 0 | GEpoch 0 | Step 222] Grad: 206.362030 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  44%|████▍     | 223/504 [3:13:20<4:03:35, 52.01s/it][Stage 0 | GEpoch 0 | Step 223] Grad: 286.593679 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  44%|████▍     | 224/504 [3:14:12<4:02:44, 52.02s/it][Stage 0 | GEpoch 0 | Step 224] Grad: 198.931642 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  45%|████▍     | 225/504 [3:15:04<4:01:54, 52.02s/it][Stage 0 | GEpoch 0 | Step 225] Grad: 199.920389 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  45%|████▍     | 226/504 [3:15:56<4:01:00, 52.01s/it][Stage 0 | GEpoch 0 | Step 226] Grad: 194.512201 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  45%|████▌     | 227/504 [3:16:48<4:00:10, 52.02s/it][Stage 0 | GEpoch 0 | Step 227] Grad: 193.882352 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  45%|████▌     | 228/504 [3:17:40<3:59:19, 52.03s/it][Stage 0 | GEpoch 0 | Step 228] Grad: 126.215861 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  45%|████▌     | 229/504 [3:18:32<3:58:27, 52.03s/it][Stage 0 | GEpoch 0 | Step 229] Grad: 133.743459 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  46%|████▌     | 230/504 [3:19:24<3:57:33, 52.02s/it][Stage 0 | GEpoch 0 | Step 230] Grad: 159.358690 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  46%|████▌     | 231/504 [3:20:16<3:56:42, 52.02s/it][Stage 0 | GEpoch 0 | Step 231] Grad: 159.448965 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  46%|████▌     | 232/504 [3:21:08<3:55:49, 52.02s/it][Stage 0 | GEpoch 0 | Step 232] Grad: 118.474480 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  46%|████▌     | 233/504 [3:22:00<3:54:59, 52.03s/it][Stage 0 | GEpoch 0 | Step 233] Grad: 164.443995 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  46%|████▋     | 234/504 [3:22:53<3:54:07, 52.03s/it][Stage 0 | GEpoch 0 | Step 234] Grad: 202.611354 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  47%|████▋     | 235/504 [3:23:44<3:53:11, 52.01s/it][Stage 0 | GEpoch 0 | Step 235] Grad: 169.653423 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  47%|████▋     | 236/504 [3:24:37<3:52:19, 52.01s/it][Stage 0 | GEpoch 0 | Step 236] Grad: 176.912326 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  47%|████▋     | 237/504 [3:25:29<3:51:26, 52.01s/it][Stage 0 | GEpoch 0 | Step 237] Grad: 241.401554 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  47%|████▋     | 238/504 [3:26:21<3:50:34, 52.01s/it][Stage 0 | GEpoch 0 | Step 238] Grad: 144.380977 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  47%|████▋     | 239/504 [3:27:13<3:49:41, 52.00s/it][Stage 0 | GEpoch 0 | Step 239] Grad: 206.083796 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  48%|████▊     | 240/504 [3:28:05<3:48:50, 52.01s/it][Stage 0 | GEpoch 0 | Step 240] Grad: 158.418460 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  48%|████▊     | 241/504 [3:28:57<3:47:59, 52.01s/it][Stage 0 | GEpoch 0 | Step 241] Grad: 167.644477 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  48%|████▊     | 242/504 [3:29:49<3:47:07, 52.01s/it][Stage 0 | GEpoch 0 | Step 242] Grad: 167.780210 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  48%|████▊     | 243/504 [3:30:41<3:46:16, 52.02s/it][Stage 0 | GEpoch 0 | Step 243] Grad: 228.636271 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  48%|████▊     | 244/504 [3:31:33<3:45:25, 52.02s/it][Stage 0 | GEpoch 0 | Step 244] Grad: 208.676820 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  49%|████▊     | 245/504 [3:32:25<3:44:35, 52.03s/it][Stage 0 | GEpoch 0 | Step 245] Grad: 167.163073 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  49%|████▉     | 246/504 [3:33:17<3:43:40, 52.02s/it][Stage 0 | GEpoch 0 | Step 246] Grad: 148.999100 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  49%|████▉     | 247/504 [3:34:09<3:42:49, 52.02s/it][Stage 0 | GEpoch 0 | Step 247] Grad: 460.780192 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  49%|████▉     | 248/504 [3:35:01<3:41:58, 52.02s/it][Stage 0 | GEpoch 0 | Step 248] Grad: 274.410616 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  49%|████▉     | 249/504 [3:35:53<3:41:06, 52.03s/it][Stage 0 | GEpoch 0 | Step 249] Grad: 120.263263 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  50%|████▉     | 250/504 [3:36:45<3:40:15, 52.03s/it][LOSS step 250] Velocity: 0.170945, Heatmap: 0.000000, PCK: 0.0000, Total: 0.170945 (α=1.00, β=0.00)
+[Stage 0 | GEpoch 0 | Step 250] Grad: 207.734772 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  50%|████▉     | 251/504 [3:37:37<3:39:22, 52.03s/it][Stage 0 | GEpoch 0 | Step 251] Grad: 160.676256 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  50%|█████     | 252/504 [3:38:29<3:38:31, 52.03s/it][Stage 0 | GEpoch 0 | Step 252] Grad: 140.660107 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  50%|█████     | 253/504 [3:39:21<3:37:38, 52.03s/it][Stage 0 | GEpoch 0 | Step 253] Grad: 255.868722 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  50%|█████     | 254/504 [3:40:13<3:36:46, 52.03s/it][Stage 0 | GEpoch 0 | Step 254] Grad: 153.270869 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  51%|█████     | 255/504 [3:41:05<3:35:53, 52.02s/it][Stage 0 | GEpoch 0 | Step 255] Grad: 225.740193 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  51%|█████     | 256/504 [3:41:57<3:35:00, 52.02s/it][Stage 0 | GEpoch 0 | Step 256] Grad: 164.215168 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  51%|█████     | 257/504 [3:42:49<3:34:08, 52.02s/it][Stage 0 | GEpoch 0 | Step 257] Grad: 157.045800 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  51%|█████     | 258/504 [3:43:41<3:33:17, 52.02s/it][Stage 0 | GEpoch 0 | Step 258] Grad: 166.821540 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  51%|█████▏    | 259/504 [3:44:33<3:32:25, 52.02s/it][Stage 0 | GEpoch 0 | Step 259] Grad: 226.636902 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  52%|█████▏    | 260/504 [3:45:25<3:31:31, 52.02s/it][Stage 0 | GEpoch 0 | Step 260] Grad: 182.260512 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  52%|█████▏    | 261/504 [3:46:17<3:30:38, 52.01s/it][Stage 0 | GEpoch 0 | Step 261] Grad: 179.240343 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  52%|█████▏    | 262/504 [3:47:09<3:29:47, 52.01s/it][Stage 0 | GEpoch 0 | Step 262] Grad: 163.108085 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  52%|█████▏    | 263/504 [3:48:01<3:28:55, 52.01s/it][Stage 0 | GEpoch 0 | Step 263] Grad: 250.750434 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  52%|█████▏    | 264/504 [3:48:53<3:28:04, 52.02s/it][Stage 0 | GEpoch 0 | Step 264] Grad: 189.272393 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  53%|█████▎    | 265/504 [3:49:45<3:27:12, 52.02s/it][Stage 0 | GEpoch 0 | Step 265] Grad: 159.054458 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  53%|█████▎    | 266/504 [3:50:37<3:26:22, 52.03s/it][Stage 0 | GEpoch 0 | Step 266] Grad: 126.520849 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  53%|█████▎    | 267/504 [3:51:29<3:25:30, 52.03s/it][Stage 0 | GEpoch 0 | Step 267] Grad: 192.241134 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  53%|█████▎    | 268/504 [3:52:21<3:24:37, 52.02s/it][Stage 0 | GEpoch 0 | Step 268] Grad: 257.827642 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  53%|█████▎    | 269/504 [3:53:13<3:23:45, 52.02s/it][Stage 0 | GEpoch 0 | Step 269] Grad: 316.882033 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  54%|█████▎    | 270/504 [3:54:05<3:22:54, 52.03s/it][Stage 0 | GEpoch 0 | Step 270] Grad: 167.871519 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  54%|█████▍    | 271/504 [3:54:57<3:22:00, 52.02s/it][Stage 0 | GEpoch 0 | Step 271] Grad: 143.086147 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  54%|█████▍    | 272/504 [3:55:49<3:21:07, 52.02s/it][Stage 0 | GEpoch 0 | Step 272] Grad: 160.298248 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  54%|█████▍    | 273/504 [3:56:41<3:20:16, 52.02s/it][Stage 0 | GEpoch 0 | Step 273] Grad: 122.545010 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  54%|█████▍    | 274/504 [3:57:33<3:19:25, 52.03s/it][Stage 0 | GEpoch 0 | Step 274] Grad: 278.651270 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  55%|█████▍    | 275/504 [3:58:25<3:18:32, 52.02s/it][Stage 0 | GEpoch 0 | Step 275] Grad: 104.043312 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  55%|█████▍    | 276/504 [3:59:17<3:17:40, 52.02s/it][Stage 0 | GEpoch 0 | Step 276] Grad: 89.016535 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  55%|█████▍    | 277/504 [4:00:09<3:16:48, 52.02s/it][Stage 0 | GEpoch 0 | Step 277] Grad: 158.079203 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  55%|█████▌    | 278/504 [4:01:01<3:15:55, 52.01s/it][Stage 0 | GEpoch 0 | Step 278] Grad: 101.221890 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  55%|█████▌    | 279/504 [4:01:53<3:15:04, 52.02s/it][Stage 0 | GEpoch 0 | Step 279] Grad: 101.301755 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  56%|█████▌    | 280/504 [4:02:45<3:14:12, 52.02s/it][Stage 0 | GEpoch 0 | Step 280] Grad: 131.812402 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  56%|█████▌    | 281/504 [4:03:37<3:13:19, 52.02s/it][Stage 0 | GEpoch 0 | Step 281] Grad: 94.164266 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  56%|█████▌    | 282/504 [4:04:29<3:12:26, 52.01s/it][Stage 0 | GEpoch 0 | Step 282] Grad: 465.282116 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  56%|█████▌    | 283/504 [4:05:21<3:11:33, 52.01s/it][Stage 0 | GEpoch 0 | Step 283] Grad: 167.778581 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  56%|█████▋    | 284/504 [4:06:13<3:10:41, 52.01s/it][Stage 0 | GEpoch 0 | Step 284] Grad: 192.247231 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  57%|█████▋    | 285/504 [4:07:05<3:09:49, 52.01s/it][Stage 0 | GEpoch 0 | Step 285] Grad: 133.035444 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  57%|█████▋    | 286/504 [4:07:57<3:08:59, 52.01s/it][Stage 0 | GEpoch 0 | Step 286] Grad: 248.783880 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  57%|█████▋    | 287/504 [4:08:49<3:08:08, 52.02s/it][Stage 0 | GEpoch 0 | Step 287] Grad: 121.155053 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  57%|█████▋    | 288/504 [4:09:42<3:07:17, 52.03s/it][Stage 0 | GEpoch 0 | Step 288] Grad: 275.411360 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  57%|█████▋    | 289/504 [4:10:34<3:06:24, 52.02s/it][Stage 0 | GEpoch 0 | Step 289] Grad: 160.568930 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  58%|█████▊    | 290/504 [4:11:26<3:05:32, 52.02s/it][Stage 0 | GEpoch 0 | Step 290] Grad: 176.353966 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  58%|█████▊    | 291/504 [4:12:18<3:04:41, 52.03s/it][Stage 0 | GEpoch 0 | Step 291] Grad: 517.601244 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  58%|█████▊    | 292/504 [4:13:10<3:03:49, 52.03s/it][Stage 0 | GEpoch 0 | Step 292] Grad: 215.324437 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  58%|█████▊    | 293/504 [4:14:02<3:02:58, 52.03s/it][Stage 0 | GEpoch 0 | Step 293] Grad: 270.818929 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  58%|█████▊    | 294/504 [4:14:54<3:02:06, 52.03s/it][Stage 0 | GEpoch 0 | Step 294] Grad: 161.689155 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  59%|█████▊    | 295/504 [4:15:46<3:01:14, 52.03s/it][Stage 0 | GEpoch 0 | Step 295] Grad: 123.600842 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  59%|█████▊    | 296/504 [4:16:38<3:00:22, 52.03s/it][Stage 0 | GEpoch 0 | Step 296] Grad: 153.408093 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  59%|█████▉    | 297/504 [4:17:30<2:59:29, 52.03s/it][Stage 0 | GEpoch 0 | Step 297] Grad: 206.620220 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  59%|█████▉    | 298/504 [4:18:22<2:58:36, 52.02s/it][Stage 0 | GEpoch 0 | Step 298] Grad: 252.813239 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  59%|█████▉    | 299/504 [4:19:14<2:57:44, 52.02s/it][Stage 0 | GEpoch 0 | Step 299] Grad: 213.925919 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  60%|█████▉    | 300/504 [4:20:06<2:56:52, 52.02s/it][LOSS step 300] Velocity: 0.167187, Heatmap: 0.000000, PCK: 0.0000, Total: 0.167187 (α=1.00, β=0.00)
+[Stage 0 | GEpoch 0 | Step 300] Grad: 177.647998 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  60%|█████▉    | 301/504 [4:20:58<2:56:02, 52.03s/it][Stage 0 | GEpoch 0 | Step 301] Grad: 215.266472 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  60%|█████▉    | 302/504 [4:21:50<2:55:09, 52.03s/it][Stage 0 | GEpoch 0 | Step 302] Grad: 163.568288 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  60%|██████    | 303/504 [4:22:42<2:54:17, 52.03s/it][Stage 0 | GEpoch 0 | Step 303] Grad: 167.504880 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  60%|██████    | 304/504 [4:23:34<2:53:24, 52.02s/it][Stage 0 | GEpoch 0 | Step 304] Grad: 209.284938 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  61%|██████    | 305/504 [4:24:26<2:52:32, 52.02s/it][Stage 0 | GEpoch 0 | Step 305] Grad: 167.747245 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  61%|██████    | 306/504 [4:25:18<2:51:39, 52.02s/it][Stage 0 | GEpoch 0 | Step 306] Grad: 208.996163 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  61%|██████    | 307/504 [4:26:10<2:50:48, 52.02s/it][Stage 0 | GEpoch 0 | Step 307] Grad: 100.733882 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  61%|██████    | 308/504 [4:27:02<2:49:55, 52.02s/it][Stage 0 | GEpoch 0 | Step 308] Grad: 217.966471 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  61%|██████▏   | 309/504 [4:27:54<2:49:03, 52.02s/it][Stage 0 | GEpoch 0 | Step 309] Grad: 283.501735 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  62%|██████▏   | 310/504 [4:28:46<2:48:13, 52.03s/it][Stage 0 | GEpoch 0 | Step 310] Grad: 213.918583 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  62%|██████▏   | 311/504 [4:29:38<2:47:21, 52.03s/it][Stage 0 | GEpoch 0 | Step 311] Grad: 150.991807 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  62%|██████▏   | 312/504 [4:30:30<2:46:29, 52.03s/it][Stage 0 | GEpoch 0 | Step 312] Grad: 111.519850 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  62%|██████▏   | 313/504 [4:31:22<2:45:37, 52.03s/it][Stage 0 | GEpoch 0 | Step 313] Grad: 342.699894 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  62%|██████▏   | 314/504 [4:32:14<2:44:43, 52.02s/it][Stage 0 | GEpoch 0 | Step 314] Grad: 245.204603 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  62%|██████▎   | 315/504 [4:33:06<2:43:52, 52.02s/it][Stage 0 | GEpoch 0 | Step 315] Grad: 166.306871 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  63%|██████▎   | 316/504 [4:33:58<2:43:00, 52.03s/it][Stage 0 | GEpoch 0 | Step 316] Grad: 323.478538 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  63%|██████▎   | 317/504 [4:34:50<2:42:08, 52.02s/it][Stage 0 | GEpoch 0 | Step 317] Grad: 218.306842 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  63%|██████▎   | 318/504 [4:35:42<2:41:15, 52.02s/it][Stage 0 | GEpoch 0 | Step 318] Grad: 147.503329 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  63%|██████▎   | 319/504 [4:36:34<2:40:24, 52.03s/it][Stage 0 | GEpoch 0 | Step 319] Grad: 164.569097 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  63%|██████▎   | 320/504 [4:37:26<2:39:33, 52.03s/it][Stage 0 | GEpoch 0 | Step 320] Grad: 196.309100 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  64%|██████▎   | 321/504 [4:38:18<2:38:42, 52.03s/it][Stage 0 | GEpoch 0 | Step 321] Grad: 280.210482 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  64%|██████▍   | 322/504 [4:39:10<2:37:49, 52.03s/it][Stage 0 | GEpoch 0 | Step 322] Grad: 223.703480 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  64%|██████▍   | 323/504 [4:40:02<2:36:57, 52.03s/it][Stage 0 | GEpoch 0 | Step 323] Grad: 204.836123 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  64%|██████▍   | 324/504 [4:40:54<2:36:04, 52.03s/it][Stage 0 | GEpoch 0 | Step 324] Grad: 183.445327 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  64%|██████▍   | 325/504 [4:41:46<2:35:13, 52.03s/it][Stage 0 | GEpoch 0 | Step 325] Grad: 208.924103 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  65%|██████▍   | 326/504 [4:42:39<2:34:20, 52.03s/it][Stage 0 | GEpoch 0 | Step 326] Grad: 364.840877 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  65%|██████▍   | 327/504 [4:43:31<2:33:27, 52.02s/it][Stage 0 | GEpoch 0 | Step 327] Grad: 307.888381 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  65%|██████▌   | 328/504 [4:44:23<2:32:35, 52.02s/it][Stage 0 | GEpoch 0 | Step 328] Grad: 83.065512 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  65%|██████▌   | 329/504 [4:45:15<2:31:44, 52.03s/it][Stage 0 | GEpoch 0 | Step 329] Grad: 117.115703 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  65%|██████▌   | 330/504 [4:46:07<2:30:52, 52.03s/it][Stage 0 | GEpoch 0 | Step 330] Grad: 126.782545 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  66%|██████▌   | 331/504 [4:46:59<2:30:01, 52.03s/it][Stage 0 | GEpoch 0 | Step 331] Grad: 205.427451 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  66%|██████▌   | 332/504 [4:47:51<2:29:10, 52.04s/it][Stage 0 | GEpoch 0 | Step 332] Grad: 207.472761 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  66%|██████▌   | 333/504 [4:48:43<2:28:18, 52.04s/it][Stage 0 | GEpoch 0 | Step 333] Grad: 349.640189 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  66%|██████▋   | 334/504 [4:49:35<2:27:25, 52.03s/it][Stage 0 | GEpoch 0 | Step 334] Grad: 314.792573 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  66%|██████▋   | 335/504 [4:50:27<2:26:33, 52.03s/it][Stage 0 | GEpoch 0 | Step 335] Grad: 226.272061 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  67%|██████▋   | 336/504 [4:51:19<2:25:41, 52.03s/it][Stage 0 | GEpoch 0 | Step 336] Grad: 195.166585 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  67%|██████▋   | 337/504 [4:52:11<2:24:49, 52.03s/it][Stage 0 | GEpoch 0 | Step 337] Grad: 221.739933 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  67%|██████▋   | 338/504 [4:53:03<2:23:56, 52.03s/it][Stage 0 | GEpoch 0 | Step 338] Grad: 194.787407 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  67%|██████▋   | 339/504 [4:53:55<2:23:03, 52.02s/it][Stage 0 | GEpoch 0 | Step 339] Grad: 127.994177 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  67%|██████▋   | 340/504 [4:54:47<2:22:12, 52.03s/it][Stage 0 | GEpoch 0 | Step 340] Grad: 145.513507 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  68%|██████▊   | 341/504 [4:55:39<2:21:19, 52.02s/it][Stage 0 | GEpoch 0 | Step 341] Grad: 204.133215 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  68%|██████▊   | 342/504 [4:56:31<2:20:27, 52.02s/it][Stage 0 | GEpoch 0 | Step 342] Grad: 160.858360 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  68%|██████▊   | 343/504 [4:57:23<2:19:35, 52.02s/it][Stage 0 | GEpoch 0 | Step 343] Grad: 93.317297 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  68%|██████▊   | 344/504 [4:58:15<2:18:43, 52.02s/it][Stage 0 | GEpoch 0 | Step 344] Grad: 152.286784 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  68%|██████▊   | 345/504 [4:59:07<2:17:51, 52.02s/it][Stage 0 | GEpoch 0 | Step 345] Grad: 231.628558 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  69%|██████▊   | 346/504 [4:59:59<2:16:58, 52.02s/it][Stage 0 | GEpoch 0 | Step 346] Grad: 120.274995 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  69%|██████▉   | 347/504 [5:00:51<2:16:08, 52.03s/it][Stage 0 | GEpoch 0 | Step 347] Grad: 156.969179 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  69%|██████▉   | 348/504 [5:01:43<2:15:15, 52.02s/it][Stage 0 | GEpoch 0 | Step 348] Grad: 155.240098 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  69%|██████▉   | 349/504 [5:02:35<2:14:23, 52.02s/it][Stage 0 | GEpoch 0 | Step 349] Grad: 124.561721 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  69%|██████▉   | 350/504 [5:03:27<2:13:30, 52.02s/it][LOSS step 350] Velocity: 0.105279, Heatmap: 0.000000, PCK: 0.0000, Total: 0.105279 (α=1.00, β=0.00)
+[Stage 0 | GEpoch 0 | Step 350] Grad: 142.314400 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  70%|██████▉   | 351/504 [5:04:19<2:12:39, 52.03s/it][Stage 0 | GEpoch 0 | Step 351] Grad: 247.073299 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  70%|██████▉   | 352/504 [5:05:11<2:11:48, 52.03s/it][Stage 0 | GEpoch 0 | Step 352] Grad: 146.966494 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  70%|███████   | 353/504 [5:06:03<2:10:58, 52.04s/it][Stage 0 | GEpoch 0 | Step 353] Grad: 190.865924 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  70%|███████   | 354/504 [5:06:55<2:10:05, 52.03s/it][Stage 0 | GEpoch 0 | Step 354] Grad: 123.043740 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  70%|███████   | 355/504 [5:07:47<2:09:12, 52.03s/it][Stage 0 | GEpoch 0 | Step 355] Grad: 113.952958 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  71%|███████   | 356/504 [5:08:39<2:08:20, 52.03s/it][Stage 0 | GEpoch 0 | Step 356] Grad: 163.134078 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  71%|███████   | 357/504 [5:09:31<2:07:29, 52.03s/it][Stage 0 | GEpoch 0 | Step 357] Grad: 228.566395 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  71%|███████   | 358/504 [5:10:23<2:06:37, 52.04s/it][Stage 0 | GEpoch 0 | Step 358] Grad: 117.883993 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  71%|███████   | 359/504 [5:11:15<2:05:45, 52.04s/it][Stage 0 | GEpoch 0 | Step 359] Grad: 288.291398 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  71%|███████▏  | 360/504 [5:12:08<2:04:53, 52.04s/it][Stage 0 | GEpoch 0 | Step 360] Grad: 278.472921 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  72%|███████▏  | 361/504 [5:13:00<2:04:01, 52.04s/it][Stage 0 | GEpoch 0 | Step 361] Grad: 162.622453 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  72%|███████▏  | 362/504 [5:13:52<2:03:09, 52.04s/it][Stage 0 | GEpoch 0 | Step 362] Grad: 262.408811 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  72%|███████▏  | 363/504 [5:14:44<2:02:16, 52.03s/it][Stage 0 | GEpoch 0 | Step 363] Grad: 177.408109 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  72%|███████▏  | 364/504 [5:15:36<2:01:24, 52.03s/it][Stage 0 | GEpoch 0 | Step 364] Grad: 155.952755 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  72%|███████▏  | 365/504 [5:16:28<2:00:32, 52.03s/it][Stage 0 | GEpoch 0 | Step 365] Grad: 200.926704 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  73%|███████▎  | 366/504 [5:17:20<1:59:39, 52.03s/it][Stage 0 | GEpoch 0 | Step 366] Grad: 149.381506 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  73%|███████▎  | 367/504 [5:18:12<1:58:48, 52.03s/it][Stage 0 | GEpoch 0 | Step 367] Grad: 184.437471 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  73%|███████▎  | 368/504 [5:19:04<1:57:56, 52.03s/it][Stage 0 | GEpoch 0 | Step 368] Grad: 160.246249 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  73%|███████▎  | 369/504 [5:19:56<1:57:03, 52.03s/it][Stage 0 | GEpoch 0 | Step 369] Grad: 117.651777 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  73%|███████▎  | 370/504 [5:20:48<1:56:11, 52.03s/it][Stage 0 | GEpoch 0 | Step 370] Grad: 131.207299 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  74%|███████▎  | 371/504 [5:21:40<1:55:20, 52.03s/it][Stage 0 | GEpoch 0 | Step 371] Grad: 198.620858 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  74%|███████▍  | 372/504 [5:22:32<1:54:28, 52.03s/it][Stage 0 | GEpoch 0 | Step 372] Grad: 185.283614 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  74%|███████▍  | 373/504 [5:23:24<1:53:37, 52.04s/it][Stage 0 | GEpoch 0 | Step 373] Grad: 351.153965 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  74%|███████▍  | 374/504 [5:24:16<1:52:45, 52.04s/it][Stage 0 | GEpoch 0 | Step 374] Grad: 188.109320 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  74%|███████▍  | 375/504 [5:25:08<1:51:52, 52.04s/it][Stage 0 | GEpoch 0 | Step 375] Grad: 130.590289 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  75%|███████▍  | 376/504 [5:26:00<1:51:00, 52.04s/it][Stage 0 | GEpoch 0 | Step 376] Grad: 113.303764 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  75%|███████▍  | 377/504 [5:26:52<1:50:08, 52.04s/it][Stage 0 | GEpoch 0 | Step 377] Grad: 150.955673 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  75%|███████▌  | 378/504 [5:27:44<1:49:15, 52.03s/it][Stage 0 | GEpoch 0 | Step 378] Grad: 136.681900 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  75%|███████▌  | 379/504 [5:28:36<1:48:22, 52.02s/it][Stage 0 | GEpoch 0 | Step 379] Grad: 141.531206 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  75%|███████▌  | 380/504 [5:29:28<1:47:30, 52.02s/it][Stage 0 | GEpoch 0 | Step 380] Grad: 293.434206 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  76%|███████▌  | 381/504 [5:30:20<1:46:38, 52.02s/it][Stage 0 | GEpoch 0 | Step 381] Grad: 143.825284 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  76%|███████▌  | 382/504 [5:31:12<1:45:46, 52.02s/it][Stage 0 | GEpoch 0 | Step 382] Grad: 133.434449 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  76%|███████▌  | 383/504 [5:32:04<1:44:55, 52.03s/it][Stage 0 | GEpoch 0 | Step 383] Grad: 124.099588 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  76%|███████▌  | 384/504 [5:32:56<1:44:03, 52.03s/it][Stage 0 | GEpoch 0 | Step 384] Grad: 310.362561 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  76%|███████▋  | 385/504 [5:33:48<1:43:11, 52.03s/it][Stage 0 | GEpoch 0 | Step 385] Grad: 134.045116 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  77%|███████▋  | 386/504 [5:34:40<1:42:18, 52.02s/it][Stage 0 | GEpoch 0 | Step 386] Grad: 113.112807 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  77%|███████▋  | 387/504 [5:35:32<1:41:26, 52.02s/it][Stage 0 | GEpoch 0 | Step 387] Grad: 113.934314 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  77%|███████▋  | 388/504 [5:36:24<1:40:33, 52.01s/it][Stage 0 | GEpoch 0 | Step 388] Grad: 124.623311 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  77%|███████▋  | 389/504 [5:37:16<1:39:41, 52.02s/it][Stage 0 | GEpoch 0 | Step 389] Grad: 118.227359 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  77%|███████▋  | 390/504 [5:38:08<1:38:50, 52.02s/it][Stage 0 | GEpoch 0 | Step 390] Grad: 276.412128 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  78%|███████▊  | 391/504 [5:39:00<1:37:58, 52.02s/it][Stage 0 | GEpoch 0 | Step 391] Grad: 138.281633 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  78%|███████▊  | 392/504 [5:39:52<1:37:06, 52.02s/it][Stage 0 | GEpoch 0 | Step 392] Grad: 172.243489 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  78%|███████▊  | 393/504 [5:40:44<1:36:15, 52.03s/it][Stage 0 | GEpoch 0 | Step 393] Grad: 176.295267 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  78%|███████▊  | 394/504 [5:41:36<1:35:23, 52.03s/it][Stage 0 | GEpoch 0 | Step 394] Grad: 202.436894 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  78%|███████▊  | 395/504 [5:42:28<1:34:31, 52.03s/it][Stage 0 | GEpoch 0 | Step 395] Grad: 203.396493 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  79%|███████▊  | 396/504 [5:43:20<1:33:39, 52.03s/it][Stage 0 | GEpoch 0 | Step 396] Grad: 130.982913 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  79%|███████▉  | 397/504 [5:44:13<1:32:47, 52.03s/it][Stage 0 | GEpoch 0 | Step 397] Grad: 188.406037 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  79%|███████▉  | 398/504 [5:45:05<1:31:55, 52.03s/it][Stage 0 | GEpoch 0 | Step 398] Grad: 104.323225 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  79%|███████▉  | 399/504 [5:45:57<1:31:04, 52.04s/it][Stage 0 | GEpoch 0 | Step 399] Grad: 222.707595 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  79%|███████▉  | 400/504 [5:46:49<1:30:11, 52.04s/it][LOSS step 400] Velocity: 0.083254, Heatmap: 0.000000, PCK: 0.0000, Total: 0.083254 (α=1.00, β=0.00)
+[Stage 0 | GEpoch 0 | Step 400] Grad: 268.205609 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  80%|███████▉  | 401/504 [5:47:41<1:29:20, 52.04s/it][Stage 0 | GEpoch 0 | Step 401] Grad: 159.919085 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  80%|███████▉  | 402/504 [5:48:33<1:28:27, 52.04s/it][Stage 0 | GEpoch 0 | Step 402] Grad: 161.010327 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  80%|███████▉  | 403/504 [5:49:25<1:27:35, 52.03s/it][Stage 0 | GEpoch 0 | Step 403] Grad: 100.099351 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  80%|████████  | 404/504 [5:50:17<1:26:42, 52.03s/it][Stage 0 | GEpoch 0 | Step 404] Grad: 129.843410 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  80%|████████  | 405/504 [5:51:09<1:25:50, 52.03s/it][Stage 0 | GEpoch 0 | Step 405] Grad: 127.139429 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  81%|████████  | 406/504 [5:52:01<1:24:58, 52.03s/it][Stage 0 | GEpoch 0 | Step 406] Grad: 253.946888 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  81%|████████  | 407/504 [5:52:53<1:24:06, 52.03s/it][Stage 0 | GEpoch 0 | Step 407] Grad: 272.843539 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  81%|████████  | 408/504 [5:53:45<1:23:14, 52.03s/it][Stage 0 | GEpoch 0 | Step 408] Grad: 191.764996 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  81%|████████  | 409/504 [5:54:37<1:22:22, 52.02s/it][Stage 0 | GEpoch 0 | Step 409] Grad: 127.950500 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  81%|████████▏ | 410/504 [5:55:29<1:21:29, 52.02s/it][Stage 0 | GEpoch 0 | Step 410] Grad: 172.157549 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  82%|████████▏ | 411/504 [5:56:21<1:20:37, 52.01s/it][Stage 0 | GEpoch 0 | Step 411] Grad: 162.205223 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  82%|████████▏ | 412/504 [5:57:13<1:19:45, 52.02s/it][Stage 0 | GEpoch 0 | Step 412] Grad: 124.924411 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  82%|████████▏ | 413/504 [5:58:05<1:18:53, 52.02s/it][Stage 0 | GEpoch 0 | Step 413] Grad: 88.506825 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  82%|████████▏ | 414/504 [5:58:57<1:18:02, 52.03s/it][Stage 0 | GEpoch 0 | Step 414] Grad: 132.617933 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  82%|████████▏ | 415/504 [5:59:49<1:17:10, 52.03s/it][Stage 0 | GEpoch 0 | Step 415] Grad: 175.132515 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  83%|████████▎ | 416/504 [6:00:41<1:16:18, 52.03s/it][Stage 0 | GEpoch 0 | Step 416] Grad: 373.728575 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  83%|████████▎ | 417/504 [6:01:33<1:15:26, 52.03s/it][Stage 0 | GEpoch 0 | Step 417] Grad: 245.997060 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  83%|████████▎ | 418/504 [6:02:25<1:14:35, 52.04s/it][Stage 0 | GEpoch 0 | Step 418] Grad: 155.491140 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  83%|████████▎ | 419/504 [6:03:17<1:13:43, 52.04s/it][Stage 0 | GEpoch 0 | Step 419] Grad: 135.854312 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  83%|████████▎ | 420/504 [6:04:09<1:12:51, 52.04s/it][Stage 0 | GEpoch 0 | Step 420] Grad: 146.802535 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  84%|████████▎ | 421/504 [6:05:01<1:11:59, 52.04s/it][Stage 0 | GEpoch 0 | Step 421] Grad: 113.538124 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  84%|████████▎ | 422/504 [6:05:53<1:11:07, 52.04s/it][Stage 0 | GEpoch 0 | Step 422] Grad: 228.636537 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  84%|████████▍ | 423/504 [6:06:45<1:10:15, 52.04s/it][Stage 0 | GEpoch 0 | Step 423] Grad: 209.389403 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  84%|████████▍ | 424/504 [6:07:37<1:09:22, 52.03s/it][Stage 0 | GEpoch 0 | Step 424] Grad: 162.508932 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  84%|████████▍ | 425/504 [6:08:29<1:08:30, 52.03s/it][Stage 0 | GEpoch 0 | Step 425] Grad: 251.121460 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  85%|████████▍ | 426/504 [6:09:21<1:07:38, 52.03s/it][Stage 0 | GEpoch 0 | Step 426] Grad: 198.736049 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  85%|████████▍ | 427/504 [6:10:13<1:06:46, 52.03s/it][Stage 0 | GEpoch 0 | Step 427] Grad: 191.549080 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  85%|████████▍ | 428/504 [6:11:05<1:05:53, 52.03s/it][Stage 0 | GEpoch 0 | Step 428] Grad: 132.540613 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  85%|████████▌ | 429/504 [6:11:58<1:05:01, 52.02s/it][Stage 0 | GEpoch 0 | Step 429] Grad: 268.673452 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  85%|████████▌ | 430/504 [6:12:50<1:04:09, 52.03s/it][Stage 0 | GEpoch 0 | Step 430] Grad: 151.233024 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  86%|████████▌ | 431/504 [6:13:42<1:03:18, 52.03s/it][Stage 0 | GEpoch 0 | Step 431] Grad: 163.706781 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  86%|████████▌ | 432/504 [6:14:34<1:02:26, 52.03s/it][Stage 0 | GEpoch 0 | Step 432] Grad: 249.899849 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  86%|████████▌ | 433/504 [6:15:26<1:01:34, 52.03s/it][Stage 0 | GEpoch 0 | Step 433] Grad: 112.123489 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  86%|████████▌ | 434/504 [6:16:18<1:00:42, 52.03s/it][Stage 0 | GEpoch 0 | Step 434] Grad: 154.636712 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  86%|████████▋ | 435/504 [6:17:10<59:49, 52.03s/it]  [Stage 0 | GEpoch 0 | Step 435] Grad: 146.689330 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  87%|████████▋ | 436/504 [6:18:02<58:57, 52.02s/it][Stage 0 | GEpoch 0 | Step 436] Grad: 198.264475 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  87%|████████▋ | 437/504 [6:18:54<58:05, 52.02s/it][Stage 0 | GEpoch 0 | Step 437] Grad: 166.985669 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  87%|████████▋ | 438/504 [6:19:46<57:13, 52.03s/it][Stage 0 | GEpoch 0 | Step 438] Grad: 183.805394 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  87%|████████▋ | 439/504 [6:20:38<56:21, 52.03s/it][Stage 0 | GEpoch 0 | Step 439] Grad: 111.627772 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  87%|████████▋ | 440/504 [6:21:30<55:30, 52.03s/it][Stage 0 | GEpoch 0 | Step 440] Grad: 226.542499 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  88%|████████▊ | 441/504 [6:22:22<54:37, 52.03s/it][Stage 0 | GEpoch 0 | Step 441] Grad: 118.039605 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  88%|████████▊ | 442/504 [6:23:14<53:46, 52.04s/it][Stage 0 | GEpoch 0 | Step 442] Grad: 160.492799 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  88%|████████▊ | 443/504 [6:24:06<52:54, 52.04s/it][Stage 0 | GEpoch 0 | Step 443] Grad: 179.675731 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  88%|████████▊ | 444/504 [6:24:58<52:02, 52.04s/it][Stage 0 | GEpoch 0 | Step 444] Grad: 114.501900 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  88%|████████▊ | 445/504 [6:25:50<51:10, 52.04s/it][Stage 0 | GEpoch 0 | Step 445] Grad: 137.773386 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  88%|████████▊ | 446/504 [6:26:42<50:18, 52.03s/it][Stage 0 | GEpoch 0 | Step 446] Grad: 143.779713 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  89%|████████▊ | 447/504 [6:27:34<49:26, 52.04s/it][Stage 0 | GEpoch 0 | Step 447] Grad: 250.628248 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  89%|████████▉ | 448/504 [6:28:26<48:33, 52.03s/it][Stage 0 | GEpoch 0 | Step 448] Grad: 113.431465 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  89%|████████▉ | 449/504 [6:29:18<47:41, 52.03s/it][Stage 0 | GEpoch 0 | Step 449] Grad: 154.260431 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  89%|████████▉ | 450/504 [6:30:10<46:49, 52.03s/it][LOSS step 450] Velocity: 0.068678, Heatmap: 0.000000, PCK: 0.0000, Total: 0.068678 (α=1.00, β=0.00)
+[Stage 0 | GEpoch 0 | Step 450] Grad: 99.792389 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  89%|████████▉ | 451/504 [6:31:02<45:57, 52.03s/it][Stage 0 | GEpoch 0 | Step 451] Grad: 93.454660 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  90%|████████▉ | 452/504 [6:31:54<45:05, 52.03s/it][Stage 0 | GEpoch 0 | Step 452] Grad: 138.273178 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  90%|████████▉ | 453/504 [6:32:46<44:13, 52.03s/it][Stage 0 | GEpoch 0 | Step 453] Grad: 119.315529 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  90%|█████████ | 454/504 [6:33:38<43:21, 52.03s/it][Stage 0 | GEpoch 0 | Step 454] Grad: 151.961090 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  90%|█████████ | 455/504 [6:34:30<42:29, 52.03s/it][Stage 0 | GEpoch 0 | Step 455] Grad: 157.206843 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  90%|█████████ | 456/504 [6:35:22<41:37, 52.03s/it][Stage 0 | GEpoch 0 | Step 456] Grad: 203.884291 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  91%|█████████ | 457/504 [6:36:14<40:45, 52.03s/it][Stage 0 | GEpoch 0 | Step 457] Grad: 113.785623 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  91%|█████████ | 458/504 [6:37:06<39:53, 52.02s/it][Stage 0 | GEpoch 0 | Step 458] Grad: 118.977682 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  91%|█████████ | 459/504 [6:37:58<39:00, 52.02s/it][Stage 0 | GEpoch 0 | Step 459] Grad: 137.298947 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  91%|█████████▏| 460/504 [6:38:50<38:08, 52.02s/it][Stage 0 | GEpoch 0 | Step 460] Grad: 200.700179 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  91%|█████████▏| 461/504 [6:39:42<37:17, 52.03s/it][Stage 0 | GEpoch 0 | Step 461] Grad: 124.138942 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  92%|█████████▏| 462/504 [6:40:35<36:25, 52.03s/it][Stage 0 | GEpoch 0 | Step 462] Grad: 141.727347 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  92%|█████████▏| 463/504 [6:41:27<35:33, 52.04s/it][Stage 0 | GEpoch 0 | Step 463] Grad: 180.075059 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  92%|█████████▏| 464/504 [6:42:19<34:41, 52.03s/it][Stage 0 | GEpoch 0 | Step 464] Grad: 110.205081 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  92%|█████████▏| 465/504 [6:43:11<33:49, 52.03s/it][Stage 0 | GEpoch 0 | Step 465] Grad: 106.076908 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  92%|█████████▏| 466/504 [6:44:03<32:57, 52.03s/it][Stage 0 | GEpoch 0 | Step 466] Grad: 160.733228 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  93%|█████████▎| 467/504 [6:44:55<32:04, 52.02s/it][Stage 0 | GEpoch 0 | Step 467] Grad: 129.808323 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  93%|█████████▎| 468/504 [6:45:47<31:12, 52.02s/it][Stage 0 | GEpoch 0 | Step 468] Grad: 183.094614 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  93%|█████████▎| 469/504 [6:46:39<30:20, 52.02s/it][Stage 0 | GEpoch 0 | Step 469] Grad: 100.697523 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  93%|█████████▎| 470/504 [6:47:31<29:28, 52.03s/it][Stage 0 | GEpoch 0 | Step 470] Grad: 217.756039 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  93%|█████████▎| 471/504 [6:48:23<28:36, 52.02s/it][Stage 0 | GEpoch 0 | Step 471] Grad: 94.791144 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  94%|█████████▎| 472/504 [6:49:15<27:44, 52.02s/it][Stage 0 | GEpoch 0 | Step 472] Grad: 161.535472 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  94%|█████████▍| 473/504 [6:50:07<26:52, 52.02s/it][Stage 0 | GEpoch 0 | Step 473] Grad: 167.872868 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  94%|█████████▍| 474/504 [6:50:59<26:00, 52.02s/it][Stage 0 | GEpoch 0 | Step 474] Grad: 136.918281 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  94%|█████████▍| 475/504 [6:51:51<25:08, 52.02s/it][Stage 0 | GEpoch 0 | Step 475] Grad: 141.039790 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  94%|█████████▍| 476/504 [6:52:43<24:16, 52.02s/it][Stage 0 | GEpoch 0 | Step 476] Grad: 146.421965 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  95%|█████████▍| 477/504 [6:53:35<23:24, 52.03s/it][Stage 0 | GEpoch 0 | Step 477] Grad: 97.193388 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  95%|█████████▍| 478/504 [6:54:27<22:32, 52.02s/it][Stage 0 | GEpoch 0 | Step 478] Grad: 185.804729 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  95%|█████████▌| 479/504 [6:55:19<21:40, 52.03s/it][Stage 0 | GEpoch 0 | Step 479] Grad: 117.870404 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  95%|█████████▌| 480/504 [6:56:11<20:48, 52.02s/it][Stage 0 | GEpoch 0 | Step 480] Grad: 142.170840 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  95%|█████████▌| 481/504 [6:57:03<19:56, 52.03s/it][Stage 0 | GEpoch 0 | Step 481] Grad: 106.665218 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  96%|█████████▌| 482/504 [6:57:55<19:04, 52.03s/it][Stage 0 | GEpoch 0 | Step 482] Grad: 228.174875 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  96%|█████████▌| 483/504 [6:58:47<18:12, 52.03s/it][Stage 0 | GEpoch 0 | Step 483] Grad: 129.272104 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  96%|█████████▌| 484/504 [6:59:39<17:20, 52.03s/it][Stage 0 | GEpoch 0 | Step 484] Grad: 152.871993 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  96%|█████████▌| 485/504 [7:00:31<16:28, 52.03s/it][Stage 0 | GEpoch 0 | Step 485] Grad: 173.072021 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  96%|█████████▋| 486/504 [7:01:23<15:36, 52.03s/it][Stage 0 | GEpoch 0 | Step 486] Grad: 196.388243 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  97%|█████████▋| 487/504 [7:02:15<14:44, 52.03s/it][Stage 0 | GEpoch 0 | Step 487] Grad: 235.085687 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  97%|█████████▋| 488/504 [7:03:07<13:52, 52.03s/it][Stage 0 | GEpoch 0 | Step 488] Grad: 113.285941 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  97%|█████████▋| 489/504 [7:03:59<13:00, 52.03s/it][Stage 0 | GEpoch 0 | Step 489] Grad: 210.453733 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  97%|█████████▋| 490/504 [7:04:51<12:08, 52.02s/it][Stage 0 | GEpoch 0 | Step 490] Grad: 167.601455 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  97%|█████████▋| 491/504 [7:05:43<11:16, 52.03s/it][Stage 0 | GEpoch 0 | Step 491] Grad: 126.611885 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  98%|█████████▊| 492/504 [7:06:35<10:24, 52.03s/it][Stage 0 | GEpoch 0 | Step 492] Grad: 158.275799 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  98%|█████████▊| 493/504 [7:07:27<09:32, 52.03s/it][Stage 0 | GEpoch 0 | Step 493] Grad: 130.668395 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  98%|█████████▊| 494/504 [7:08:19<08:40, 52.03s/it][Stage 0 | GEpoch 0 | Step 494] Grad: 132.653728 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  98%|█████████▊| 495/504 [7:09:11<07:48, 52.02s/it][Stage 0 | GEpoch 0 | Step 495] Grad: 116.816017 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  98%|█████████▊| 496/504 [7:10:03<06:56, 52.02s/it][Stage 0 | GEpoch 0 | Step 496] Grad: 231.479537 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  99%|█████████▊| 497/504 [7:10:55<06:04, 52.02s/it][Stage 0 | GEpoch 0 | Step 497] Grad: 153.747307 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  99%|█████████▉| 498/504 [7:11:47<05:12, 52.02s/it][Stage 0 | GEpoch 0 | Step 498] Grad: 112.918045 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  99%|█████████▉| 499/504 [7:12:39<04:20, 52.02s/it][Stage 0 | GEpoch 0 | Step 499] Grad: 76.404292 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  99%|█████████▉| 500/504 [7:13:32<03:28, 52.03s/it][LOSS step 500] Velocity: 0.249461, Heatmap: 0.000000, PCK: 0.0000, Total: 0.249461 (α=1.00, β=0.00)
+[Stage 0 | GEpoch 0 | Step 500] Grad: 214.842898 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0:  99%|█████████▉| 501/504 [7:14:24<02:36, 52.02s/it][Stage 0 | GEpoch 0 | Step 501] Grad: 96.288325 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0: 100%|█████████▉| 502/504 [7:15:16<01:44, 52.03s/it][Stage 0 | GEpoch 0 | Step 502] Grad: 140.717420 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0: 100%|█████████▉| 503/504 [7:16:08<00:52, 52.03s/it][Stage 0 | GEpoch 0 | Step 503] Grad: 181.050464 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 0: 100%|██████████| 504/504 [7:17:00<00:00, 52.02s/it][Stage 0] GEpoch 0: 100%|██████████| 504/504 [7:17:00<00:00, 52.02s/it]
+[Etapa 0] Ejecutando validación...
+[LOSS step 550] Velocity: 0.315635, Heatmap: 0.000000, PCK: 0.0000, Total: 0.315635 (α=1.00, β=0.00)
+[LOSS step 600] Velocity: 0.080007, Heatmap: 0.000000, PCK: 0.0000, Total: 0.080007 (α=1.00, β=0.00)
+[LOSS step 650] Velocity: 0.063323, Heatmap: 0.000000, PCK: 0.0000, Total: 0.063323 (α=1.00, β=0.00)
+[Stage 0] GEpoch 0 | Train Loss: 0.187754 | Val Loss: 0.127082 | Train PCK: 0.0000 | Val PCK: 0.0000 | Best: inf
+🟢 Nueva mejor val_loss. Guardando checkpoint...
+LoRA guardado en: /home/antoniodetoro/nas_dataset/antonio/qwen/OUTPUTS_EXPERIMENTOS/exp_single_stage/stage_00_dataset_splits_uniformes_rareza_ususarios/qwen_lora_best.pt (época global 0, val_loss=0.127082)
+Copia guardada en: /home/antoniodetoro/nas_dataset/antonio/qwen/OUTPUTS_EXPERIMENTOS/exp_single_stage/stage_00_dataset_splits_uniformes_rareza_ususarios/checkpoints/dataset_splits_uniformes_rareza_ususarios_epoch000.pt
+[Inference epoch 0] 12 imágenes, 4 pasos
+[Inference epoch 0] Guardado: /home/antoniodetoro/nas_dataset/antonio/qwen/OUTPUTS_EXPERIMENTOS/exp_single_stage/stage_00_dataset_splits_uniformes_rareza_ususarios/inference_epoch_000/sample_00.png
+[Inference epoch 0] Guardado: /home/antoniodetoro/nas_dataset/antonio/qwen/OUTPUTS_EXPERIMENTOS/exp_single_stage/stage_00_dataset_splits_uniformes_rareza_ususarios/inference_epoch_000/sample_01.png
+[Inference epoch 0] Guardado: /home/antoniodetoro/nas_dataset/antonio/qwen/OUTPUTS_EXPERIMENTOS/exp_single_stage/stage_00_dataset_splits_uniformes_rareza_ususarios/inference_epoch_000/sample_02.png
+[Inference epoch 0] Guardado: /home/antoniodetoro/nas_dataset/antonio/qwen/OUTPUTS_EXPERIMENTOS/exp_single_stage/stage_00_dataset_splits_uniformes_rareza_ususarios/inference_epoch_000/sample_03.png
+[Inference epoch 0] Guardado: /home/antoniodetoro/nas_dataset/antonio/qwen/OUTPUTS_EXPERIMENTOS/exp_single_stage/stage_00_dataset_splits_uniformes_rareza_ususarios/inference_epoch_000/sample_04.png
+[Inference epoch 0] Guardado: /home/antoniodetoro/nas_dataset/antonio/qwen/OUTPUTS_EXPERIMENTOS/exp_single_stage/stage_00_dataset_splits_uniformes_rareza_ususarios/inference_epoch_000/sample_05.png
+[Inference epoch 0] Guardado: /home/antoniodetoro/nas_dataset/antonio/qwen/OUTPUTS_EXPERIMENTOS/exp_single_stage/stage_00_dataset_splits_uniformes_rareza_ususarios/inference_epoch_000/sample_06.png
+[Inference epoch 0] Guardado: /home/antoniodetoro/nas_dataset/antonio/qwen/OUTPUTS_EXPERIMENTOS/exp_single_stage/stage_00_dataset_splits_uniformes_rareza_ususarios/inference_epoch_000/sample_07.png
+[Inference epoch 0] Guardado: /home/antoniodetoro/nas_dataset/antonio/qwen/OUTPUTS_EXPERIMENTOS/exp_single_stage/stage_00_dataset_splits_uniformes_rareza_ususarios/inference_epoch_000/sample_08.png
+[Inference epoch 0] Guardado: /home/antoniodetoro/nas_dataset/antonio/qwen/OUTPUTS_EXPERIMENTOS/exp_single_stage/stage_00_dataset_splits_uniformes_rareza_ususarios/inference_epoch_000/sample_09.png
+[Inference epoch 0] Guardado: /home/antoniodetoro/nas_dataset/antonio/qwen/OUTPUTS_EXPERIMENTOS/exp_single_stage/stage_00_dataset_splits_uniformes_rareza_ususarios/inference_epoch_000/sample_10.png
+[Inference epoch 0] Guardado: /home/antoniodetoro/nas_dataset/antonio/qwen/OUTPUTS_EXPERIMENTOS/exp_single_stage/stage_00_dataset_splits_uniformes_rareza_ususarios/inference_epoch_000/sample_11.png
+[Inference epoch 0] Callback completado.
+Checkpoint guardado en: /home/antoniodetoro/nas_dataset/antonio/qwen/OUTPUTS_EXPERIMENTOS/exp_single_stage/stage_00_dataset_splits_uniformes_rareza_ususarios/checkpoints/dataset_splits_uniformes_rareza_ususarios_final_epoch000.pt
+[Etapa 0] Global epoch 1 | Local epoch 1 start
+[Stage 0] GEpoch 1:   0%|          | 0/504 [00:00<?, ?it/s][Stage 0 | GEpoch 1 | Step 0] Grad: 211.149699 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:   0%|          | 1/504 [00:54<7:39:04, 54.76s/it][Stage 0 | GEpoch 1 | Step 1] Grad: 145.356397 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:   0%|          | 2/504 [01:46<7:24:43, 53.15s/it][Stage 0 | GEpoch 1 | Step 2] Grad: 177.835462 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:   1%|          | 3/504 [02:38<7:19:36, 52.65s/it][Stage 0 | GEpoch 1 | Step 3] Grad: 117.970763 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:   1%|          | 4/504 [03:30<7:16:43, 52.41s/it][Stage 0 | GEpoch 1 | Step 4] Grad: 197.760630 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:   1%|          | 5/504 [04:22<7:14:46, 52.28s/it][Stage 0 | GEpoch 1 | Step 5] Grad: 156.961801 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:   1%|          | 6/504 [05:14<7:13:13, 52.20s/it][Stage 0 | GEpoch 1 | Step 6] Grad: 216.152749 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:   1%|▏         | 7/504 [06:07<7:11:59, 52.15s/it][Stage 0 | GEpoch 1 | Step 7] Grad: 175.105070 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:   2%|▏         | 8/504 [06:59<7:10:48, 52.11s/it][Stage 0 | GEpoch 1 | Step 8] Grad: 118.800622 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:   2%|▏         | 9/504 [07:51<7:09:48, 52.10s/it][Stage 0 | GEpoch 1 | Step 9] Grad: 163.732869 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:   2%|▏         | 10/504 [08:43<7:08:46, 52.08s/it][Stage 0 | GEpoch 1 | Step 10] Grad: 224.036349 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:   2%|▏         | 11/504 [09:35<7:07:48, 52.07s/it][Stage 0 | GEpoch 1 | Step 11] Grad: 158.457577 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:   2%|▏         | 12/504 [10:27<7:06:48, 52.05s/it][Stage 0 | GEpoch 1 | Step 12] Grad: 202.120958 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:   3%|▎         | 13/504 [11:19<7:05:51, 52.04s/it][Stage 0 | GEpoch 1 | Step 13] Grad: 197.315819 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:   3%|▎         | 14/504 [12:11<7:05:00, 52.04s/it][Stage 0 | GEpoch 1 | Step 14] Grad: 146.780702 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:   3%|▎         | 15/504 [13:03<7:04:06, 52.04s/it][Stage 0 | GEpoch 1 | Step 15] Grad: 127.150835 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:   3%|▎         | 16/504 [13:55<7:03:11, 52.03s/it][Stage 0 | GEpoch 1 | Step 16] Grad: 110.958982 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:   3%|▎         | 17/504 [14:47<7:02:18, 52.03s/it][Stage 0 | GEpoch 1 | Step 17] Grad: 264.506656 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:   4%|▎         | 18/504 [15:39<7:01:26, 52.03s/it][Stage 0 | GEpoch 1 | Step 18] Grad: 241.561078 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:   4%|▍         | 19/504 [16:31<7:00:37, 52.04s/it][Stage 0 | GEpoch 1 | Step 19] Grad: 135.817606 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:   4%|▍         | 20/504 [17:23<6:59:46, 52.04s/it][Stage 0 | GEpoch 1 | Step 20] Grad: 148.492955 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:   4%|▍         | 21/504 [18:15<6:58:53, 52.04s/it][Stage 0 | GEpoch 1 | Step 21] Grad: 132.755689 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:   4%|▍         | 22/504 [19:07<6:58:01, 52.04s/it][Stage 0 | GEpoch 1 | Step 22] Grad: 176.513210 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:   5%|▍         | 23/504 [19:59<6:57:09, 52.04s/it][Stage 0 | GEpoch 1 | Step 23] Grad: 196.052738 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:   5%|▍         | 24/504 [20:51<6:57:01, 52.13s/it][Stage 0 | GEpoch 1 | Step 24] Grad: 127.872150 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:   5%|▍         | 25/504 [21:43<6:55:56, 52.10s/it][Stage 0 | GEpoch 1 | Step 25] Grad: 107.928980 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:   5%|▌         | 26/504 [22:35<6:54:54, 52.08s/it][Stage 0 | GEpoch 1 | Step 26] Grad: 148.444324 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:   5%|▌         | 27/504 [23:28<6:53:56, 52.07s/it][Stage 0 | GEpoch 1 | Step 27] Grad: 142.340991 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:   6%|▌         | 28/504 [24:20<6:52:59, 52.06s/it][LOSS step 700] Velocity: 0.334408, Heatmap: 0.000000, PCK: 0.0000, Total: 0.334408 (α=1.00, β=0.00)
+[Stage 0 | GEpoch 1 | Step 28] Grad: 302.968337 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:   6%|▌         | 29/504 [25:12<6:52:03, 52.05s/it][Stage 0 | GEpoch 1 | Step 29] Grad: 219.342424 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:   6%|▌         | 30/504 [26:04<6:51:08, 52.04s/it][Stage 0 | GEpoch 1 | Step 30] Grad: 135.955668 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:   6%|▌         | 31/504 [26:56<6:50:17, 52.05s/it][Stage 0 | GEpoch 1 | Step 31] Grad: 107.143955 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:   6%|▋         | 32/504 [27:48<6:49:25, 52.05s/it][Stage 0 | GEpoch 1 | Step 32] Grad: 145.160088 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:   7%|▋         | 33/504 [28:40<6:48:33, 52.05s/it][Stage 0 | GEpoch 1 | Step 33] Grad: 188.052384 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:   7%|▋         | 34/504 [29:32<6:47:37, 52.04s/it][Stage 0 | GEpoch 1 | Step 34] Grad: 155.053649 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:   7%|▋         | 35/504 [30:24<6:46:42, 52.03s/it][Stage 0 | GEpoch 1 | Step 35] Grad: 119.710736 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:   7%|▋         | 36/504 [31:16<6:45:50, 52.03s/it][Stage 0 | GEpoch 1 | Step 36] Grad: 98.127201 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:   7%|▋         | 37/504 [32:08<6:44:59, 52.03s/it][Stage 0 | GEpoch 1 | Step 37] Grad: 187.195180 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:   8%|▊         | 38/504 [33:00<6:44:04, 52.03s/it][Stage 0 | GEpoch 1 | Step 38] Grad: 102.396159 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:   8%|▊         | 39/504 [33:52<6:43:12, 52.03s/it][Stage 0 | GEpoch 1 | Step 39] Grad: 135.554737 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:   8%|▊         | 40/504 [34:44<6:42:23, 52.03s/it][Stage 0 | GEpoch 1 | Step 40] Grad: 103.443863 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:   8%|▊         | 41/504 [35:36<6:41:31, 52.03s/it][Stage 0 | GEpoch 1 | Step 41] Grad: 217.653823 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:   8%|▊         | 42/504 [36:28<6:40:40, 52.04s/it][Stage 0 | GEpoch 1 | Step 42] Grad: 158.026635 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:   9%|▊         | 43/504 [37:20<6:39:46, 52.03s/it][Stage 0 | GEpoch 1 | Step 43] Grad: 123.359108 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:   9%|▊         | 44/504 [38:12<6:38:55, 52.03s/it][Stage 0 | GEpoch 1 | Step 44] Grad: 211.804092 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:   9%|▉         | 45/504 [39:04<6:38:04, 52.04s/it][Stage 0 | GEpoch 1 | Step 45] Grad: 95.192274 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:   9%|▉         | 46/504 [39:56<6:37:14, 52.04s/it][Stage 0 | GEpoch 1 | Step 46] Grad: 144.837658 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:   9%|▉         | 47/504 [40:48<6:36:22, 52.04s/it][Stage 0 | GEpoch 1 | Step 47] Grad: 122.336638 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:  10%|▉         | 48/504 [41:40<6:35:32, 52.04s/it][Stage 0 | GEpoch 1 | Step 48] Grad: 116.839543 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:  10%|▉         | 49/504 [42:32<6:34:39, 52.04s/it][Stage 0 | GEpoch 1 | Step 49] Grad: 137.494389 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:  10%|▉         | 50/504 [43:24<6:33:46, 52.04s/it][Stage 0 | GEpoch 1 | Step 50] Grad: 163.011635 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:  10%|█         | 51/504 [44:16<6:32:55, 52.04s/it][Stage 0 | GEpoch 1 | Step 51] Grad: 114.523860 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:  10%|█         | 52/504 [45:08<6:32:02, 52.04s/it][Stage 0 | GEpoch 1 | Step 52] Grad: 139.764605 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:  11%|█         | 53/504 [46:00<6:31:10, 52.04s/it][Stage 0 | GEpoch 1 | Step 53] Grad: 142.118504 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:  11%|█         | 54/504 [46:52<6:30:17, 52.04s/it][Stage 0 | GEpoch 1 | Step 54] Grad: 137.640233 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:  11%|█         | 55/504 [47:45<6:29:26, 52.04s/it][Stage 0 | GEpoch 1 | Step 55] Grad: 110.824903 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:  11%|█         | 56/504 [48:37<6:28:32, 52.04s/it][Stage 0 | GEpoch 1 | Step 56] Grad: 142.086716 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:  11%|█▏        | 57/504 [49:29<6:27:37, 52.03s/it][Stage 0 | GEpoch 1 | Step 57] Grad: 157.610371 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:  12%|█▏        | 58/504 [50:21<6:26:45, 52.03s/it][Stage 0 | GEpoch 1 | Step 58] Grad: 175.951793 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:  12%|█▏        | 59/504 [51:13<6:25:54, 52.03s/it][Stage 0 | GEpoch 1 | Step 59] Grad: 151.294620 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:  12%|█▏        | 60/504 [52:05<6:25:04, 52.04s/it][Stage 0 | GEpoch 1 | Step 60] Grad: 131.862767 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:  12%|█▏        | 61/504 [52:57<6:24:09, 52.03s/it][Stage 0 | GEpoch 1 | Step 61] Grad: 97.723980 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:  12%|█▏        | 62/504 [53:49<6:23:18, 52.03s/it][Stage 0 | GEpoch 1 | Step 62] Grad: 126.216563 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:  12%|█▎        | 63/504 [54:41<6:22:27, 52.03s/it][Stage 0 | GEpoch 1 | Step 63] Grad: 173.445232 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:  13%|█▎        | 64/504 [55:33<6:21:33, 52.03s/it][Stage 0 | GEpoch 1 | Step 64] Grad: 126.780928 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:  13%|█▎        | 65/504 [56:25<6:20:42, 52.03s/it][Stage 0 | GEpoch 1 | Step 65] Grad: 107.235688 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:  13%|█▎        | 66/504 [57:17<6:19:50, 52.03s/it][Stage 0 | GEpoch 1 | Step 66] Grad: 260.213211 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:  13%|█▎        | 67/504 [58:09<6:18:58, 52.03s/it][Stage 0 | GEpoch 1 | Step 67] Grad: 215.569543 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:  13%|█▎        | 68/504 [59:01<6:18:04, 52.03s/it][Stage 0 | GEpoch 1 | Step 68] Grad: 109.547042 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:  14%|█▎        | 69/504 [59:53<6:17:14, 52.03s/it][Stage 0 | GEpoch 1 | Step 69] Grad: 166.256796 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:  14%|█▍        | 70/504 [1:00:45<6:16:23, 52.04s/it][Stage 0 | GEpoch 1 | Step 70] Grad: 119.825913 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:  14%|█▍        | 71/504 [1:01:37<6:15:32, 52.04s/it][Stage 0 | GEpoch 1 | Step 71] Grad: 147.002890 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:  14%|█▍        | 72/504 [1:02:29<6:14:41, 52.04s/it][Stage 0 | GEpoch 1 | Step 72] Grad: 142.387907 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:  14%|█▍        | 73/504 [1:03:21<6:13:50, 52.04s/it][Stage 0 | GEpoch 1 | Step 73] Grad: 209.030694 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:  15%|█▍        | 74/504 [1:04:13<6:12:59, 52.04s/it][Stage 0 | GEpoch 1 | Step 74] Grad: 109.051164 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:  15%|█▍        | 75/504 [1:05:05<6:12:05, 52.04s/it][Stage 0 | GEpoch 1 | Step 75] Grad: 208.467478 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:  15%|█▌        | 76/504 [1:05:57<6:11:10, 52.03s/it][Stage 0 | GEpoch 1 | Step 76] Grad: 114.983407 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:  15%|█▌        | 77/504 [1:06:49<6:10:18, 52.03s/it][Stage 0 | GEpoch 1 | Step 77] Grad: 302.212369 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:  15%|█▌        | 78/504 [1:07:41<6:09:26, 52.03s/it][LOSS step 750] Velocity: 0.228801, Heatmap: 0.000000, PCK: 0.0000, Total: 0.228801 (α=1.00, β=0.00)
+[Stage 0 | GEpoch 1 | Step 78] Grad: 210.127946 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:  16%|█▌        | 79/504 [1:08:33<6:08:34, 52.03s/it][Stage 0 | GEpoch 1 | Step 79] Grad: 105.945849 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:  16%|█▌        | 80/504 [1:09:25<6:07:42, 52.04s/it][Stage 0 | GEpoch 1 | Step 80] Grad: 124.069369 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:  16%|█▌        | 81/504 [1:10:17<6:06:51, 52.04s/it][Stage 0 | GEpoch 1 | Step 81] Grad: 247.997381 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:  16%|█▋        | 82/504 [1:11:10<6:06:37, 52.13s/it][Stage 0 | GEpoch 1 | Step 82] Grad: 108.270990 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:  16%|█▋        | 83/504 [1:12:02<6:05:33, 52.10s/it][Stage 0 | GEpoch 1 | Step 83] Grad: 198.313719 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:  17%|█▋        | 84/504 [1:12:54<6:04:32, 52.08s/it][Stage 0 | GEpoch 1 | Step 84] Grad: 132.305314 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:  17%|█▋        | 85/504 [1:13:46<6:03:33, 52.06s/it][Stage 0 | GEpoch 1 | Step 85] Grad: 128.343739 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:  17%|█▋        | 86/504 [1:14:38<6:02:38, 52.05s/it][Stage 0 | GEpoch 1 | Step 86] Grad: 117.744834 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:  17%|█▋        | 87/504 [1:15:30<6:01:42, 52.05s/it][Stage 0 | GEpoch 1 | Step 87] Grad: 104.955192 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:  17%|█▋        | 88/504 [1:16:22<6:00:48, 52.04s/it][Stage 0 | GEpoch 1 | Step 88] Grad: 107.117904 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:  18%|█▊        | 89/504 [1:17:14<5:59:56, 52.04s/it][Stage 0 | GEpoch 1 | Step 89] Grad: 85.274815 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:  18%|█▊        | 90/504 [1:18:06<5:59:02, 52.03s/it][Stage 0 | GEpoch 1 | Step 90] Grad: 132.854844 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:  18%|█▊        | 91/504 [1:18:58<5:58:12, 52.04s/it][Stage 0 | GEpoch 1 | Step 91] Grad: 133.903619 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:  18%|█▊        | 92/504 [1:19:50<5:57:20, 52.04s/it][Stage 0 | GEpoch 1 | Step 92] Grad: 134.522841 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:  18%|█▊        | 93/504 [1:20:42<5:56:25, 52.03s/it][Stage 0 | GEpoch 1 | Step 93] Grad: 181.287612 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:  19%|█▊        | 94/504 [1:21:34<5:55:31, 52.03s/it][Stage 0 | GEpoch 1 | Step 94] Grad: 118.881360 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:  19%|█▉        | 95/504 [1:22:26<5:54:42, 52.03s/it][Stage 0 | GEpoch 1 | Step 95] Grad: 103.081949 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:  19%|█▉        | 96/504 [1:23:18<5:53:50, 52.04s/it][Stage 0 | GEpoch 1 | Step 96] Grad: 117.259851 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:  19%|█▉        | 97/504 [1:24:10<5:52:56, 52.03s/it][Stage 0 | GEpoch 1 | Step 97] Grad: 117.984423 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:  19%|█▉        | 98/504 [1:25:02<5:52:04, 52.03s/it][Stage 0 | GEpoch 1 | Step 98] Grad: 102.058380 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:  20%|█▉        | 99/504 [1:25:54<5:51:16, 52.04s/it][Stage 0 | GEpoch 1 | Step 99] Grad: 143.464974 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:  20%|█▉        | 100/504 [1:26:46<5:50:26, 52.05s/it][Stage 0 | GEpoch 1 | Step 100] Grad: 229.283645 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:  20%|██        | 101/504 [1:27:38<5:49:33, 52.04s/it][Stage 0 | GEpoch 1 | Step 101] Grad: 94.172613 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:  20%|██        | 102/504 [1:28:30<5:48:42, 52.05s/it][Stage 0 | GEpoch 1 | Step 102] Grad: 107.234215 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:  20%|██        | 103/504 [1:29:23<5:47:49, 52.04s/it][Stage 0 | GEpoch 1 | Step 103] Grad: 110.183781 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:  21%|██        | 104/504 [1:30:15<5:46:55, 52.04s/it][Stage 0 | GEpoch 1 | Step 104] Grad: 127.883986 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:  21%|██        | 105/504 [1:31:07<5:46:04, 52.04s/it][Stage 0 | GEpoch 1 | Step 105] Grad: 133.960159 | Params grad≠0: 956/960 | VRAM: 11.99/22.47GB | Peak: 21.49GB
+[Stage 0] GEpoch 1:  21%|██        | 106/504 [1:31:59<5:45:12, 52.04s/it]slurmstepd: error: *** JOB 17773701 ON g06 CANCELLED AT 2026-06-06T11:11:50 ***

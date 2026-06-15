@@ -1,0 +1,48 @@
+
+The following have been reloaded with a version change:
+  1) libiconv/1.16 => libiconv/1.17       3) ncurses/6.3 => ncurses/6.4
+  2) libxml2/2.10.1 => libxml2/2.10.3     4) xz/5.2.7 => xz/5.4.1
+
+Training: 1 GPU (cuda:0)
+Etapas a ejecutar (1):
+  [0] /home/antoniodetoro/nas_dataset/antonio/qwen/experimentos/exp_largo/dataset_splits_uniformes_rareza_ususarios.json
+Cargando modelo desde /home/antoniodetoro/nas_dataset/antonio/qwen/Qwen-Fused-Angles → cuda:0
+Loading checkpoint shards:   0%|          | 0/5 [00:00<?, ?it/s]Loading checkpoint shards:  20%|██        | 1/5 [02:58<11:55, 178.97s/it]Loading checkpoint shards:  40%|████      | 2/5 [05:52<08:47, 175.77s/it]Loading checkpoint shards:  60%|██████    | 3/5 [08:32<05:36, 168.41s/it]Loading checkpoint shards:  80%|████████  | 4/5 [11:09<02:43, 163.99s/it]Loading checkpoint shards: 100%|██████████| 5/5 [11:24<00:00, 110.15s/it]Loading checkpoint shards: 100%|██████████| 5/5 [11:24<00:00, 136.81s/it]
+Creando QwenSingleGPUWrapper...
+QwenSingleGPUWrapper: 60 bloques transformer (sin split).
+/home/antoniodetoro/envs/venv_jupyter/lib/python3.10/site-packages/huggingface_hub/utils/_validators.py:205: UserWarning: The `local_dir_use_symlinks` argument is deprecated and ignored in `hf_hub_download`. Downloading to a local directory does not use symlinks anymore.
+  warnings.warn(
+HTTP Request: HEAD https://huggingface.co/Qwen/Qwen-Image-Edit-2509/resolve/main/scheduler/scheduler_config.json "HTTP/1.1 307 Temporary Redirect"
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/Qwen/Qwen-Image-Edit-2509/d3968ef930e841f4c73640fb8afa3b306a78167e/scheduler%2Fscheduler_config.json "HTTP/1.1 200 OK"
+Cargando VAE en cuda:0...
+HTTP Request: HEAD https://huggingface.co/Qwen/Qwen-Image-Edit-2509/resolve/main/vae/config.json "HTTP/1.1 307 Temporary Redirect"
+HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/Qwen/Qwen-Image-Edit-2509/d3968ef930e841f4c73640fb8afa3b306a78167e/vae%2Fconfig.json "HTTP/1.1 200 OK"
+HTTP Request: HEAD https://huggingface.co/Qwen/Qwen-Image-Edit-2509/resolve/d3968ef930e841f4c73640fb8afa3b306a78167e/vae/diffusion_pytorch_model.safetensors.index.json "HTTP/1.1 404 Not Found"
+HRNet no encontrado, solo velocity loss.
+
+============================================================
+  ETAPA 0  |  dataset_splits_uniformes_rareza_ususarios
+  epoch_offset=0  |  epochs=100
+============================================================
+  output_dir : /home/antoniodetoro/nas_dataset/antonio/qwen/OUTPUTS_EXPERIMENTOS/exp_single_stage/stage_00_dataset_splits_uniformes_rareza_ususarios
+  JSON       : /home/antoniodetoro/nas_dataset/antonio/qwen/experimentos/exp_largo/dataset_splits_uniformes_rareza_ususarios.json
+✓ Estado del optimizador restaurado
+✓ Reanudando desde época local 30 | best_loss=0.066052
+1920/1920 pesos LoRA cargados
+⚠️ patience_counter reseteado a 0 por --reset_patience
+Experimento: sin nombre
+Descripción: 
+Timestamps → train: 336 | val: 112 | test: 112
+[train] Cargando índice desde caché: /home/antoniodetoro/nas_dataset/antonio/qwen/datasets/dataset_local_latents_512_idx/ts_index_cache_train.json
+[train] Índice cargado: 15298 timestamps únicos
+[train] 2016 .pt files para 336 timestamps
+[train] Calculando global_max_seq_len...
+[train] global_max_seq_len = 227
+[val] Cargando índice desde caché: /home/antoniodetoro/nas_dataset/antonio/qwen/datasets/dataset_local_latents_512_idx/ts_index_cache_val.json
+[val] Índice cargado: 15298 timestamps únicos
+[val] 672 .pt files para 112 timestamps
+[val] Calculando global_max_seq_len...
+[val] global_max_seq_len = 227
+[test] Cargando índice desde caché: /home/antoniodetoro/nas_dataset/antonio/qwen/datasets/dataset_local_latents_
